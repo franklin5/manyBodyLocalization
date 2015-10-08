@@ -6,28 +6,24 @@ clc
 % Further: It should be further simplified by build a index matrix to avoid repeated
 % calculation!!
 
-L=6;
-N=L/2;
+L=3;
+N=1;
 N2=1;
 
 dim=factorial(L)/factorial(N)/factorial(L-N); % too large L or N will give non-number: NaN or Inf.
 basis1=zeros(N,dim);
-
 tic;
 site=zeros(N+1,1);
-for p=1:dim,
-    
+for p=1:dim,    
     loop=1;
     if N==1,
         loop=loop+1;
         site(loop)=p;
-    else
-        
+    else        
         sumAA=0;
         while loop<N,
             len=L-site(loop);
-            num=N-loop;
-            
+            num=N-loop;            
             for jcar=len-1:-1:num,
                 sum2=sumAA;
                 sumAA=sumAA+factorial(jcar)/factorial(num)/factorial(jcar-num);
@@ -37,12 +33,10 @@ for p=1:dim,
                     site(loop)=site(loop-1)+len-jcar;
                     break;
                 end
-            end
-            
+            end            
         end
         site(loop+1)=site(loop)+p-sum2;
-    end
-    
+    end    
     for j=1:N,
         basis1(j,p)=site(j+1);
     end
