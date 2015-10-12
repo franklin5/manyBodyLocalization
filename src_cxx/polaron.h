@@ -55,6 +55,7 @@ public:
   void compute_hopping(int &,const int);
   void spin_flag_condition(int &, int &, const int);
   void compute_col_index(const int, const int, const int );
+  int myindex(gsl_vector *, const int);
   PetscErrorCode initial_state();
   PetscErrorCode measurement();
 };

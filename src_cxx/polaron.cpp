@@ -115,9 +115,14 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianConstruction(){
 	ierr = MatCreate(PETSC_COMM_WORLD,&Hpolaron);CHKERRQ(ierr);
 	  ierr = MatSetType(Hpolaron,MATMPIAIJ);CHKERRQ(ierr);
 	  ierr = MatSetSizes(Hpolaron,PETSC_DECIDE,PETSC_DECIDE,DIM,DIM);CHKERRQ(ierr);
+	  // TODO: should be able to set the symmetric/hermitian option and
+	  // only do upper-right triangle part of matrix construction .
+	  // and perform corresponding operations thereon.
+	  // ierr = MatSetOption(Hpolaron,MAT_SYMMETRIC,PETSC_TRUE);CHKERRQ(ierr);
+	  // ierr = MatSetOption(Hpolaron,MAT_HERMITIAN,PETSC_TRUE);CHKERRQ(ierr);
 
-	  // TODO: what is the estimate of the pre-allocation
-	  // number of nonzeros per row in DIAGONAL portion of local submatrix
+	  // TODO: what is the estimate of the pre-allocation?
+	  // -- number of nonzeros per row in DIAGONAL portion of local submatrix
 	  // (same value is used for all local rows) ? I put dim temporarily here.
 	  // number of nonzeros per row in the OFF-DIAGONAL portion of local submatrix
 	  // (same value is used for all local rows) ?  I put dim temporarily here..
@@ -133,7 +138,8 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianConstruction(){
 	  ierr = MatAssemblyBegin(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
       ierr = MatAssemblyEnd(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+//	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
 	  ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
 
 	  return ierr;
@@ -148,6 +154,9 @@ PetscErrorCode cHamiltonianMatrix::assemblance(){
 	  PetscReal _val_;
 	  for (ROW=rstart; ROW<rend; ROW++) {
 		  nonzeros = 0;
+
+//		  cout << "row is " << ROW << endl;
+
 		  block(ROW,_jdim1,_jdim2);
 		  //		  cout << jdim1 << '\t' << jdim2 << endl;
 		  // random potential and interaction terms are diagonal.
@@ -155,10 +164,10 @@ PetscErrorCode cHamiltonianMatrix::assemblance(){
 		  // hopping terms are off-diagonal.
 		  // --------- hopping of spin down -------------
 		  spin_flag = 2; // to be consistent with convention in construct_basis member function.
-		  compute_hopping(nonzeros,spin_flag);
+//		  compute_hopping(nonzeros,spin_flag);
 		  // ----------- hopping of spin up ---------------
 		  spin_flag = 1;
-		  compute_hopping(nonzeros,spin_flag);
+//		  compute_hopping(nonzeros,spin_flag);
 		 if (nonzeros > __MAXNOZEROS__){
 	        	cerr << "nonzeros on a row " <<  nonzeros << " is larger than the pre-allocated range of"
 	        	<<  __MAXNOZEROS__ <<" const arrays. Try increasing the max number in polaron.h" << endl;
@@ -168,6 +177,36 @@ PetscErrorCode cHamiltonianMatrix::assemblance(){
 	        }
 	  }
 	return ierr;
+}
+
+int cHamiltonianMatrix::myindex(gsl_vector * site, const int _N_){
+//	for (int var = 0; var < site->size; ++var) {
+//		cout << gsl_vector_get(site,var) << endl;
+//	}
+//	cout << "total size of site is " << site->size << endl;
+//	cout << "_N_ value is " << _N_ << endl;
+	int p = 0;
+	if (_N_ == 1) {
+		p = gsl_vector_get(site,0);
+	} else {
+		int loop = 1;
+		for (int i = 1; i <= gsl_vector_get(site,loop-1)-1; ++i) {
+			p += gsl_sf_choose(L-i,_N_-loop);
+		}
+		loop ++;
+		do {
+			for (int i = gsl_vector_get(site,loop-2)+1; i < gsl_vector_get(site,loop-1)-1; ++i) {
+				p += gsl_sf_choose(L-i,_N_-loop);
+			}
+			loop ++;
+		} while (loop<_N_);
+		p += gsl_vector_get(site,_N_-1)-gsl_vector_get(site,_N_-2); // % that's fine!
+	}
+
+    cout << "q is " << p << endl;
+
+
+	return p;
 }
 
 void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
@@ -185,6 +224,7 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 		cerr << "Wrong spin flag configuration. Check construct_basis call in fock member function." << endl;
 		exit(1);
 	}
+	gsl_vector * site = gsl_vector_alloc(_N); // TODO: why in construct basis member function, the alloc size is _N+1?
 
 	for (int jpar = 1; jpar <= _N; ++jpar) {
 	// ------------- Start: Boundary term -------------
@@ -200,7 +240,11 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
                             site(nnn)=site(nnn-1);
                             site(1)=1;
 					 */
-					q = myindex(site,_N,L);
+					for (int nnn = 1; nnn < _N; ++nnn) {
+						gsl_vector_set(site,nnn,gsl_matrix_get(basis,nnn-1,jdim));
+					}
+					gsl_vector_set(site,0,1);
+					q = myindex(site,_N);
 				}
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
@@ -211,11 +255,15 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 				} else {
 				/*
 				 * nnn=2:N;
-											site=basis1(:,jdim1);
-											site(nnn-1)=site(nnn);
-											site(N)=L;
+					site=basis1(:,jdim1);
+					site(nnn-1)=site(nnn);
+					site(N)=L;
 				 */
-					q = myindex(site,_N,L);
+					for (int nnn = 1; nnn < _N; ++nnn) {
+						gsl_vector_set(site,nnn-1,gsl_matrix_get(basis,nnn,jdim));
+					}
+					gsl_vector_set(site,_N-1,L);
+					q = myindex(site,_N);
 				}
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
@@ -226,7 +274,21 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
  *                     site=basis1(:,jdim1);
                     site(jpar)=site(jpar)+1;
  */
-                q=myindex(site,_N,L);
+				cout << "i am the first condition" << endl;
+//				cout << "jpar = " << jpar << " jdim = " << jdim << endl;
+
+				for (int nnn = 0; nnn < _N; ++nnn) {
+					gsl_vector_set(site,nnn,gsl_matrix_get(basis,nnn,jdim));
+				}
+				gsl_vector_set(site,jpar-1,gsl_vector_get(site,jpar-1)+1);
+
+//				cout << "site is" << endl;
+//				for (int var = 0; var < _N; ++var) {
+//					cout << gsl_vector_get(site,var) << '\t';
+//				}
+//				cout << endl;
+
+                q=myindex(site,_N);
                 compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
 			if ((jpar==1 && gsl_matrix_get(basis,jpar-1,jdim)>1) || (jpar>1 && gsl_matrix_get(basis,jpar-1,jdim)-1>gsl_matrix_get(basis,jpar-2,jdim))) {
@@ -234,36 +296,54 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 			 *                     site=basis1(:,jdim1);
                     site(jpar)=site(jpar)-1;
 			 */
-				q=myindex(site,_N,L);
+				cout << "i am the second condition" << endl;
+//				cout << "jpar = " << jpar << " jdim = " << jdim << endl;
+
+				for (int nnn = 0; nnn < _N; ++nnn) {
+					gsl_vector_set(site,nnn,gsl_matrix_get(basis,nnn,jdim));
+				}
+				gsl_vector_set(site,jpar-1,gsl_vector_get(site,jpar-1)-1);
+
+//				cout << "site is" << endl;
+//				for (int var = 0; var < _N; ++var) {
+//					cout << gsl_vector_get(site,var) << '\t';
+//				}
+//				cout << endl;
+
+				q=myindex(site,_N);
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
 		}
 	}
+	gsl_vector_free (site);
 }
 
 void cHamiltonianMatrix::compute_col_index(const int nonzeros, const int spin_flag, const int q){
 	value[nonzeros] = -1.0; // -t term. hopping value, t, is taken as the unit.
 	if (spin_flag == 1) { // spin up
-		col[nonzeros] = (_jdim2-1)*dim+q;
+		col[nonzeros] = (_jdim2)*dim+q-1;
+		cout << "spin up" << endl;
 	} else if (spin_flag == 2) { // spin down
 		col[nonzeros] = (q-1)*dim+_jdim1;
+		cout << "spin down" << endl;
 	} else {
 		cerr << "Wrong spin flag configuration. Check construct_basis call in fock member function." << endl;
 		exit(1);
 	}
+	cout << "col is " << col[nonzeros] << endl; // << " and value is " << value[nonzeros]
 }
 
 void cHamiltonianMatrix::spin_flag_condition(int & _N, int & _dim, const int spin_flag){
 	if (spin_flag == 1) { // spin up
-			_N = N;
-			_dim = dim;
-		} else if (spin_flag == 2) { // spin down
-			_N = N2;
-			_dim = dim2;
-		} else {
-			cerr << "Wrong spin flag configuration. Check construct_basis call in fock member function." << endl;
-			exit(1);
-		}
+		_N = N;
+		_dim = dim;
+	} else if (spin_flag == 2) { // spin down
+		_N = N2;
+		_dim = dim2;
+	} else {
+		cerr << "Wrong spin flag configuration. Check construct_basis call in fock member function." << endl;
+		exit(1);
+	}
 }
 
 PetscReal cHamiltonianMatrix::compute_diag(){
@@ -286,6 +366,7 @@ PetscReal cHamiltonianMatrix::compute_diag(){
 			}
 		}
 	}
+//			cout << sumAA << endl;
 	return sumAA;
 }
 
