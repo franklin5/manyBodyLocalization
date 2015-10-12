@@ -138,8 +138,8 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianConstruction(){
 	  ierr = MatAssemblyBegin(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
       ierr = MatAssemblyEnd(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-//	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
-      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
 	  ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
 
 	  return ierr;
@@ -158,16 +158,16 @@ PetscErrorCode cHamiltonianMatrix::assemblance(){
 //		  cout << "row is " << ROW << endl;
 
 		  block(ROW,_jdim1,_jdim2);
-		  //		  cout << jdim1 << '\t' << jdim2 << endl;
+//		  cout << _jdim1 << '\t' << _jdim2 << endl;
 		  // random potential and interaction terms are diagonal.
 		  col[nonzeros] = ROW;value[nonzeros] = compute_diag();nonzeros++;
 		  // hopping terms are off-diagonal.
 		  // --------- hopping of spin down -------------
 		  spin_flag = 2; // to be consistent with convention in construct_basis member function.
-//		  compute_hopping(nonzeros,spin_flag);
+		  compute_hopping(nonzeros,spin_flag);
 		  // ----------- hopping of spin up ---------------
 		  spin_flag = 1;
-//		  compute_hopping(nonzeros,spin_flag);
+		  compute_hopping(nonzeros,spin_flag);
 		 if (nonzeros > __MAXNOZEROS__){
 	        	cerr << "nonzeros on a row " <<  nonzeros << " is larger than the pre-allocated range of"
 	        	<<  __MAXNOZEROS__ <<" const arrays. Try increasing the max number in polaron.h" << endl;
@@ -274,7 +274,7 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
  *                     site=basis1(:,jdim1);
                     site(jpar)=site(jpar)+1;
  */
-				cout << "i am the first condition" << endl;
+//				cout << "i am the first condition" << endl;
 //				cout << "jpar = " << jpar << " jdim = " << jdim << endl;
 
 				for (int nnn = 0; nnn < _N; ++nnn) {
@@ -296,7 +296,7 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 			 *                     site=basis1(:,jdim1);
                     site(jpar)=site(jpar)-1;
 			 */
-				cout << "i am the second condition" << endl;
+//				cout << "i am the second condition" << endl;
 //				cout << "jpar = " << jpar << " jdim = " << jdim << endl;
 
 				for (int nnn = 0; nnn < _N; ++nnn) {
@@ -322,15 +322,15 @@ void cHamiltonianMatrix::compute_col_index(const int nonzeros, const int spin_fl
 	value[nonzeros] = -1.0; // -t term. hopping value, t, is taken as the unit.
 	if (spin_flag == 1) { // spin up
 		col[nonzeros] = (_jdim2)*dim+q-1;
-		cout << "spin up" << endl;
+//		cout << "spin up" << endl;
 	} else if (spin_flag == 2) { // spin down
 		col[nonzeros] = (q-1)*dim+_jdim1;
-		cout << "spin down" << endl;
+//		cout << "spin down" << endl;
 	} else {
 		cerr << "Wrong spin flag configuration. Check construct_basis call in fock member function." << endl;
 		exit(1);
 	}
-	cout << "col is " << col[nonzeros] << endl; // << " and value is " << value[nonzeros]
+//	cout << "col is " << col[nonzeros] << endl; // << " and value is " << value[nonzeros]
 }
 
 void cHamiltonianMatrix::spin_flag_condition(int & _N, int & _dim, const int spin_flag){
@@ -354,11 +354,12 @@ PetscReal cHamiltonianMatrix::compute_diag(){
 			tempR = tempR-1; // potential fail of the index 0 or 1 bug. Temporary fix.
 			sumAA += gsl_vector_get(randV,int(round(tempR)));
 		}
-//		cout << sumAA << endl;
+//	cout << sumAA << endl;
 	}
 	for (int jpar2 = 1; jpar2 <= N2; ++jpar2) {
-		sumAA += gsl_vector_get(randV,gsl_matrix_get(basis2,jpar2-1,_jdim1)-1);
+		sumAA += gsl_vector_get(randV,gsl_matrix_get(basis2,jpar2-1,_jdim2)-1);
 	}
+//	cout << sumAA << endl;
 	for (int jpar = 1; jpar <= N; ++jpar) {
 		for (int jpar2 = 1; jpar2 <= N2; ++jpar2) {
 			if (gsl_matrix_get(basis1,jpar-1,_jdim1)==gsl_matrix_get(basis2,jpar2-1,_jdim2)) {
@@ -366,7 +367,7 @@ PetscReal cHamiltonianMatrix::compute_diag(){
 			}
 		}
 	}
-//			cout << sumAA << endl;
+//	cout << sumAA << endl;
 	return sumAA;
 }
 

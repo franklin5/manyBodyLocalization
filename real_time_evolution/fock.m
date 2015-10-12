@@ -6,7 +6,7 @@ clc
 % Further: It should be further simplified by build a index matrix to avoid repeated
 % calculation!!
 
-L=2;
+L=3;
 N=1;
 N2=1;
 
