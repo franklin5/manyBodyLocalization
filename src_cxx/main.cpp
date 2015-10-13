@@ -39,6 +39,7 @@ int main(int argc,char **args){
   Hpolaron.input();
   Hpolaron.fock();
   Hpolaron.timeEvolutaion();
+  Hpolaron.measurement();
   Hpolaron.destruction();
   ierr = PetscFinalize();
   return 0;

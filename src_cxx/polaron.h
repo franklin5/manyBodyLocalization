@@ -40,6 +40,7 @@ protected:
 public:
   cHamiltonianMatrix(){}
   ~cHamiltonianMatrix(){}
+  PetscErrorCode measurement();
   PetscErrorCode destruction();
   PetscErrorCode input();
   PetscErrorCode fock();
@@ -47,6 +48,7 @@ public:
   PetscErrorCode timeEvolutaion();
   void randomPotential(gsl_vector*);
   PetscErrorCode hamiltonianConstruction();
+  PetscErrorCode hamiltonianRescaling();
   PetscErrorCode assemblance();
   void block(int, int &, int &);
   PetscReal compute_diag();
@@ -57,6 +59,5 @@ public:
   void compute_col_index(const int, const int, const int );
   int myindex(gsl_vector *, const int);
   PetscErrorCode initial_state();
-  PetscErrorCode measurement();
 };
 #endif

@@ -82,12 +82,12 @@ PetscErrorCode cHamiltonianMatrix::fock(){
 				}
 				cout << "EOL" << endl;
 			}
-			for (int i = 0; i < N; ++i) {
-							for (int j = 0; j < dim; ++j) {
-								cout << gsl_matrix_get(basis2,i,j) << '\t';
-							}
-							cout << "EOL" << endl;
-						}
+			for (int i = 0; i < N2; ++i) {
+				for (int j = 0; j < dim2; ++j) {
+					cout << gsl_matrix_get(basis2,i,j) << '\t';
+				}
+				cout << "EOL" << endl;
+			}
 		}
 	return ierr;
 }
@@ -108,6 +108,66 @@ PetscErrorCode cHamiltonianMatrix::timeEvolutaion(){
 
 	hamiltonianConstruction();
 
+	hamiltonianRescaling();
+
+	// initial state preperation
+
+	// Kernal Polynomial Method
+
+	return ierr;
+}
+
+PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
+	// ------- maximum and minimum of energy spectrum ----------
+	/*
+	 * Hpolaron=sparse(row,col,ele,dim*dim2,dim*dim2);
+    [v1,d1]=eigs(Hpolaron,3,'sa');
+    [v2,d2]=eigs(-Hpolaron,3,'sa');
+    Emax=-d2(1,1);
+    Emin=d1(1,1);
+    epsilon=0.01;
+    a=(Emax-Emin)/(2-epsilon);
+    b=(Emax+Emin)/2;
+    fprintf('---------------------------------------------------------- \n');
+    fprintf('Half Wides of Many-Body Spectrum: a=(Emax-Emin)/2=%5.2f \n', a);
+    fprintf('Center of Many-Body Spectrum: b=(Emax+Emin)/2=%5.2f \n', b);
+
+    % --------- rescaled Hamiltonian -------------
+    row2=1:dim*dim2;
+    col2=1:dim*dim2;
+    ele2=1+0*row2;
+    unit=sparse(row2,col2,ele2,dim*dim2,dim*dim2);
+    Hpolaron2=(Hpolaron-b*unit)/a;% Take care!! how to operate the non-zero element is crucial!!
+    %---------------------------------------------------
+    % -------- End of Cosntruction of Hamiltonian ------
+    %=============================================================
+	 */
+	return ierr;
+}
+
+PetscErrorCode cHamiltonianMatrix::measurement(){
+	/* TODO: translate the measurement code.
+	 *
+	position=1;
+	% ------ Matrix Definition --------------
+	Mdensity1f0=zeros(L,Nt0);
+	Mdensity2f0=zeros(L,Nt0);
+	Mdensity1f=zeros(L,Nt);
+	Mdensity2f=zeros(L,Nt);
+
+	ALLdepart=zeros(Nt0+Nt,Ndis);
+	ALLentropy=zeros(Nt0+Nt,Ndis);
+
+	site2=zeros(1,N2);
+	site2(1)=position;
+	p2=index(site2,N2,L);%index of impurity particle, also the position on the lattice
+
+	rr=1-p2:1:L-p2;
+	mm=zeros(dim,1)+1;
+	rr=kron(rr',mm);%departure distance!
+	 *
+	 */
+	return ierr;
 	return ierr;
 }
 
@@ -138,8 +198,8 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianConstruction(){
 	  ierr = MatAssemblyBegin(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
       ierr = MatAssemblyEnd(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
-//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+//	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
 	  ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
 
 	  return ierr;
@@ -203,7 +263,7 @@ int cHamiltonianMatrix::myindex(gsl_vector * site, const int _N_){
 		p += gsl_vector_get(site,_N_-1)-gsl_vector_get(site,_N_-2); // % that's fine!
 	}
 
-    cout << "q is " << p << endl;
+//    cout << "q is " << p << endl;
 
 
 	return p;
@@ -457,31 +517,6 @@ end
 
 	 *
 	 */
-}
-
-PetscErrorCode cHamiltonianMatrix::measurement(){
-	/* TODO: translate the measurement code.
-	 *
-position=1;
-% ------ Matrix Definition --------------
-Mdensity1f0=zeros(L,Nt0);
-Mdensity2f0=zeros(L,Nt0);
-Mdensity1f=zeros(L,Nt);
-Mdensity2f=zeros(L,Nt);
-
-ALLdepart=zeros(Nt0+Nt,Ndis);
-ALLentropy=zeros(Nt0+Nt,Ndis);
-
-site2=zeros(1,N2);
-site2(1)=position;
-p2=index(site2,N2,L);%index of impurity particle, also the position on the lattice
-
-rr=1-p2:1:L-p2;
-mm=zeros(dim,1)+1;
-rr=kron(rr',mm);%departure distance!
-	 *
-	 */
-	return ierr;
 }
 
 PetscErrorCode cHamiltonianMatrix::destruction(){
