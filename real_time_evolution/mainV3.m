@@ -8,10 +8,10 @@ load Hilbert0.mat;
 %judge=0;% Clean background!---This background serves as a heat bath! 
 judge=1;% Disordered background!---'energy' bath due to interaction
 
-boundary=1; % @Open Boundary
-% boundary=0; % @Periodic Boundary
+%boundary=1; % @Open Boundary
+ boundary=0; % @Periodic Boundary
 
-L=3;
+L=2;
 N=1;
 N2=1;
 
