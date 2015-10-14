@@ -11,7 +11,7 @@ judge=1;% Disordered background!---'energy' bath due to interaction
 %boundary=1; % @Open Boundary
  boundary=0; % @Periodic Boundary
 
-L=2;
+L=3;
 N=1;
 N2=1;
 

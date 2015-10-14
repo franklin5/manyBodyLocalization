@@ -198,8 +198,8 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianConstruction(){
 	  ierr = MatAssemblyBegin(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
       ierr = MatAssemblyEnd(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-//	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
-      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
 	  ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
 
 	  return ierr;
@@ -327,7 +327,7 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 				}
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
-		} else { // TODO: Do we consider boundary==1 case or other?
+		} //else { // TODO: Do we consider boundary==1 case or other?
 	// ------------- End: Boundary term -------------.
 			if ( (jpar< _N && gsl_matrix_get(basis,jpar-1,jdim)+1<gsl_matrix_get(basis,jpar,jdim)) || (jpar==_N && gsl_matrix_get(basis,jpar-1,jdim)<L) ) {
 /*
@@ -373,7 +373,7 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 				q=myindex(site,_N);
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
-		}
+		//}
 	}
 	gsl_vector_free (site);
 }

@@ -13,9 +13,10 @@ OBJ=$(EXAMPLESC:.cpp=.o)
 
 include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
+include ${SLEPC_DIR}/lib/slepc/conf/slepc_common
 
 GSL_DIR=/home/ld7/bin/gsl-1.16/installation
-GSL_INCLUDE_DIR=-I$(GSL_DIR)/include
+GSL_INCLUDE_DIR=-I$(GSL_DIR)/include 
 GSL_LINK_DIR=-L$(GSL_DIR)/lib -lgsl -lgslcblas -limf -lm 
 
 COMPILE = $(GSL_INCLUDE_DIR) $(PETSC_FC_INCLUDES) $(SLEPC_INCLUDE)

@@ -1,6 +1,6 @@
 #ifndef POLARON_H
 #define POLARON_H
-#include <petscksp.h>
+#include <slepceps.h>
 #include <iostream>
 #include <fstream>
 #include <assert.h>
