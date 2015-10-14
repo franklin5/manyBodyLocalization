@@ -26,7 +26,7 @@ LINK = $(GSL_LINK_DIR) $(LINK_FLAGS)
 
 EXE = mbl
 all: ${OBJ}  chkopts
-	-${CLINKER} -o ${EXE} ${OBJ}  $(LINK) ${PETSC_KSP_LIB} 
+	-${CLINKER} -o ${EXE} ${OBJ}  $(LINK) ${PETSC_KSP_LIB} ${SLEPC_EPS_LIB}
 #	${RM} ${OBJ}
 
 touch:

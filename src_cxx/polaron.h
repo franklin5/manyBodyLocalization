@@ -1,6 +1,17 @@
 #ifndef POLARON_H
 #define POLARON_H
+/*
+  Include "petscksp.h" so that we can use KSP solvers.  Note that this file
+  automatically includes:
+     petscsys.h       - base PETSc routines   petscvec.h - vectors
+     petscmat.h - matrices
+     petscis.h     - index sets            petscksp.h - Krylov subspace methods
+     petscviewer.h - viewers               petscpc.h  - preconditioners
+
+*/
 #include <slepceps.h>
+//#include <petscksp.h>
+//#include <petscsys.h>
 #include <iostream>
 #include <fstream>
 #include <assert.h>
@@ -16,16 +27,14 @@ const PetscInt __MAXNOZEROS__ = 100; // TODO: This is the max number in a row --
 
 class cHamiltonianMatrix{
 private:
-//  Vec            b,u;          /* RHS, test_exact solutions */
+  Vec            xr,xi;          /* RHS, test_exact solutions */
   Mat            Hpolaron;
-//  KSP            ksp;              /* linear solver context */
-//  PC             pc;               /* preconditioner context */
-//  PetscReal      tol;  /* norm of solution error */
-//  PetscViewer    viewer;
+  EPS			 eps;
+  EPSType		 type;
   gsl_matrix     *basis1, *basis2;
   gsl_vector	 *randV;
-  PetscInt       ROW,COLUMN,rstart,rend,nlocal,col[__MAXNOZEROS__];
-  PetscScalar    value[__MAXNOZEROS__];
+  PetscInt       ROW,COLUMN,rstart,rend,nlocal,col[__MAXNOZEROS__],nev,its,maxit,nconv;
+  PetscScalar    value[__MAXNOZEROS__],kr,ki;
 protected:
   PetscErrorCode ierr;
   PetscInt       N,N2,L,position;
@@ -34,7 +43,7 @@ protected:
   	  	  	  	  	  	  	  	  // boundary=1; % @Open Boundary
   	  	  	  	  	  	  	  	  // boundary=0; % @Periodic Boundary
   PetscInt		 dim, dim2,DIM;   // Derived parameters: too large L or N will give non-number: NaN or Inf.
-  PetscReal      W,U,tmax,Nt, dt;
+  PetscReal      W,U,tmax,Nt, dt,tol,error,re,im;
   PetscMPIInt    rank, size;
   int 			 _jdim1, _jdim2;
 public:

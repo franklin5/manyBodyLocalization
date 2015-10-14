@@ -142,6 +142,56 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
     % -------- End of Cosntruction of Hamiltonian ------
     %=============================================================
 	 */
+	ierr = MatCreateVecs(Hpolaron,NULL,&xr);CHKERRQ(ierr);
+	ierr = MatCreateVecs(Hpolaron,NULL,&xi);CHKERRQ(ierr);
+	ierr = EPSCreate(PETSC_COMM_WORLD,&eps);CHKERRQ(ierr);
+	ierr = EPSSetOperators(eps,Hpolaron,NULL);CHKERRQ(ierr);
+	ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr);
+	ierr = EPSSetFromOptions(eps);CHKERRQ(ierr);
+	ierr = EPSSolve(eps);CHKERRQ(ierr);
+	ierr = EPSGetIterationNumber(eps,&its);CHKERRQ(ierr);
+	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of iterations of the method: %D\n",its);CHKERRQ(ierr);
+	ierr = EPSGetType(eps,&type);CHKERRQ(ierr);
+	ierr = PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);CHKERRQ(ierr);
+	ierr = EPSGetDimensions(eps,&nev,NULL,NULL);CHKERRQ(ierr);
+	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %D\n",nev);CHKERRQ(ierr);
+	ierr = EPSGetTolerances(eps,&tol,&maxit);CHKERRQ(ierr);
+	ierr = PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%D\n",(double)tol,maxit);CHKERRQ(ierr);
+	ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
+	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of converged eigenpairs: %D\n\n",nconv);CHKERRQ(ierr);
+	if (nconv>0) {
+		/*
+		Display eigenvalues and relative errors
+		115
+		*/
+		ierr = PetscPrintf(PETSC_COMM_WORLD,
+		"           k          ||Ax-kx||/||kx||\n"
+		"   ----------------- ------------------\n");CHKERRQ(ierr);
+		for (int i=0;i<nconv;i++) {
+			/*
+			Get converged eigenpairs: i-th eigenvalue is stored in kr (real part) and
+			ki (imaginary part)
+			*/
+			ierr = EPSGetEigenpair(eps,i,&kr,&ki,xr,xi);CHKERRQ(ierr);
+			/*
+			Compute the relative error associated to each eigenpair
+			*/
+			ierr = EPSComputeError(eps,i,EPS_ERROR_RELATIVE,&error);CHKERRQ(ierr);
+			#if defined(PETSC_USE_COMPLEX)
+				re = PetscRealPart(kr);
+				im = PetscImaginaryPart(kr);
+			#else
+				re = kr;
+				im = ki;
+			#endif
+			if (im!=0.0) {
+				ierr = PetscPrintf(PETSC_COMM_WORLD," %9f%+9f j %12g\n",(double)re,(double)im,(double)error);CHKERRQ(ierr);
+			} else {
+				ierr = PetscPrintf(PETSC_COMM_WORLD,"   %12f       %12g\n",(double)re,(double)error);CHKERRQ(ierr);
+			}
+		}
+		ierr = PetscPrintf(PETSC_COMM_WORLD,"\n");CHKERRQ(ierr);
+	}
 	return ierr;
 }
 
@@ -525,6 +575,10 @@ PetscErrorCode cHamiltonianMatrix::destruction(){
 	  gsl_matrix_free(basis1);
 	  gsl_matrix_free(basis2);
 	  gsl_vector_free(randV);
+	  ierr = EPSDestroy(&eps);CHKERRQ(ierr);
+	  ierr = MatDestroy(&Hpolaron);CHKERRQ(ierr);
+	  ierr = VecDestroy(&xr);CHKERRQ(ierr);
+	  ierr = VecDestroy(&xi);CHKERRQ(ierr);
 //	  cout << " do i have a seg fault?" << endl;
 	return ierr;
 }
