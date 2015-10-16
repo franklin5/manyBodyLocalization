@@ -45,9 +45,9 @@ PetscErrorCode cHamiltonianMatrix::input(){
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        judge = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << judge << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
-	        boundary= intdummyvalue;    if (ig == 0) cout << dummyname << "=" << boundary << endl;
-//	        fscanf(input,"%s %lf", dummyname, &dummyvalue);
-//	        tol = dummyvalue;    if (ig == 0) cout << dummyname << "=" << tol << endl;
+	        boundary = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << boundary << endl;
+	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
+	        position = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << position << endl;
 	        fclose(input);
 	        if (ig == 0) {
 	        	if (judge==0) {
@@ -106,118 +106,87 @@ PetscErrorCode cHamiltonianMatrix::timeEvolutaion(){
 		    }
 	}
 
-	hamiltonianConstruction();
+	ierr = hamiltonianConstruction();CHKERRQ(ierr);
 
-	hamiltonianRescaling();
+	ierr = hamiltonianRescaling();CHKERRQ(ierr);
 
 	// initial state preperation
-
+	ierr = initial_state();CHKERRQ(ierr);
+	//	%==============================================================
+		//	    % -------- time-dependent evolution --------------
+		//	    %-------------------------------------------------
 	// Kernal Polynomial Method
 
 	return ierr;
 }
 
 PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
-	// ------- maximum and minimum of energy spectrum ----------
-	/*
-	 * Hpolaron=sparse(row,col,ele,dim*dim2,dim*dim2);
-    [v1,d1]=eigs(Hpolaron,3,'sa');
-    [v2,d2]=eigs(-Hpolaron,3,'sa');
-    Emax=-d2(1,1);
-    Emin=d1(1,1);
-    epsilon=0.01;
-    a=(Emax-Emin)/(2-epsilon);
-    b=(Emax+Emin)/2;
-    fprintf('---------------------------------------------------------- \n');
-    fprintf('Half Wides of Many-Body Spectrum: a=(Emax-Emin)/2=%5.2f \n', a);
-    fprintf('Center of Many-Body Spectrum: b=(Emax+Emin)/2=%5.2f \n', b);
 
-    % --------- rescaled Hamiltonian -------------
-    row2=1:dim*dim2;
-    col2=1:dim*dim2;
-    ele2=1+0*row2;
-    unit=sparse(row2,col2,ele2,dim*dim2,dim*dim2);
-    Hpolaron2=(Hpolaron-b*unit)/a;% Take care!! how to operate the non-zero element is crucial!!
-    %---------------------------------------------------
-    % -------- End of Cosntruction of Hamiltonian ------
-    %=============================================================
-	 */
-	ierr = MatCreateVecs(Hpolaron,NULL,&xr);CHKERRQ(ierr);
-	ierr = MatCreateVecs(Hpolaron,NULL,&xi);CHKERRQ(ierr);
+//	ierr = MatCreateVecs(Hpolaron,NULL,&xr);CHKERRQ(ierr);
+//	ierr = MatCreateVecs(Hpolaron,NULL,&xi);CHKERRQ(ierr);
 	ierr = EPSCreate(PETSC_COMM_WORLD,&eps);CHKERRQ(ierr);
 	ierr = EPSSetOperators(eps,Hpolaron,NULL);CHKERRQ(ierr);
 	ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr);
-	ierr = EPSSetFromOptions(eps);CHKERRQ(ierr);
+	PetscBool her;
+	ierr = EPSIsHermitian(eps, &her); CHKERRQ(ierr); if (rank==0) {cout << endl;cout << "is hermitian? " << her << endl;}
+	PetscBool pos;
+	ierr = EPSIsPositive(eps, &pos); CHKERRQ(ierr); if (rank==0) {cout << "is positive? " << pos << endl;cout << endl;}
+//	ierr = EPSSetType(eps,EPSPOWER);CHKERRQ(ierr);
+	ierr = EPSSetWhichEigenpairs(eps,EPS_LARGEST_REAL);CHKERRQ(ierr);
+//	ierr = EPSSetFromOptions(eps);CHKERRQ(ierr);
 	ierr = EPSSolve(eps);CHKERRQ(ierr);
-	ierr = EPSGetIterationNumber(eps,&its);CHKERRQ(ierr);
-	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of iterations of the method: %D\n",its);CHKERRQ(ierr);
-	ierr = EPSGetType(eps,&type);CHKERRQ(ierr);
-	ierr = PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);CHKERRQ(ierr);
-	ierr = EPSGetDimensions(eps,&nev,NULL,NULL);CHKERRQ(ierr);
-	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %D\n",nev);CHKERRQ(ierr);
-	ierr = EPSGetTolerances(eps,&tol,&maxit);CHKERRQ(ierr);
-	ierr = PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%D\n",(double)tol,maxit);CHKERRQ(ierr);
-	ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
-	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of converged eigenpairs: %D\n\n",nconv);CHKERRQ(ierr);
-	if (nconv>0) {
-		/*
-		Display eigenvalues and relative errors
-		115
-		*/
-		ierr = PetscPrintf(PETSC_COMM_WORLD,
-		"           k          ||Ax-kx||/||kx||\n"
-		"   ----------------- ------------------\n");CHKERRQ(ierr);
-		for (int i=0;i<nconv;i++) {
-			/*
-			Get converged eigenpairs: i-th eigenvalue is stored in kr (real part) and
-			ki (imaginary part)
-			*/
-			ierr = EPSGetEigenpair(eps,i,&kr,&ki,xr,xi);CHKERRQ(ierr);
-			/*
-			Compute the relative error associated to each eigenpair
-			*/
-			ierr = EPSComputeError(eps,i,EPS_ERROR_RELATIVE,&error);CHKERRQ(ierr);
-			#if defined(PETSC_USE_COMPLEX)
-				re = PetscRealPart(kr);
-				im = PetscImaginaryPart(kr);
-			#else
-				re = kr;
-				im = ki;
-			#endif
-			if (im!=0.0) {
-				ierr = PetscPrintf(PETSC_COMM_WORLD," %9f%+9f j %12g\n",(double)re,(double)im,(double)error);CHKERRQ(ierr);
-			} else {
-				ierr = PetscPrintf(PETSC_COMM_WORLD,"   %12f       %12g\n",(double)re,(double)error);CHKERRQ(ierr);
-			}
-		}
-		ierr = PetscPrintf(PETSC_COMM_WORLD,"\n");CHKERRQ(ierr);
-	}
+//	ierr = EPSGetIterationNumber(eps,&its);CHKERRQ(ierr);
+//	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of iterations of the method: %D\n",its);CHKERRQ(ierr);
+//	ierr = EPSGetType(eps,&type);CHKERRQ(ierr);
+//	ierr = PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);CHKERRQ(ierr);
+//	ierr = EPSGetDimensions(eps,&nev,NULL,NULL);CHKERRQ(ierr);
+//	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %D\n",nev);CHKERRQ(ierr);
+//	ierr = EPSGetTolerances(eps,&tol,&maxit);CHKERRQ(ierr);
+//	ierr = PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%D\n",(double)tol,maxit);CHKERRQ(ierr);
+	// ------- maximum and minimum of energy spectrum ----------
+	ierr = EPSGetEigenpair(eps,0,&HpolaronMax,NULL,NULL,NULL);CHKERRQ(ierr);
+	ierr = EPSSetWhichEigenpairs(eps,EPS_SMALLEST_REAL);CHKERRQ(ierr);
+	ierr = EPSSolve(eps);CHKERRQ(ierr);
+	ierr = EPSGetEigenpair(eps,0,&HpolaronMin,NULL,NULL,NULL);CHKERRQ(ierr);
+	double epsilon_cut_off = 0.01;
+	a_scaling = PetscRealPart(HpolaronMax-HpolaronMin)/(2.0-epsilon_cut_off);
+	b_scaling = PetscRealPart(HpolaronMax+HpolaronMin)/2.0;
+//	if (rank==0) {
+//		cout << "HpolaronMax is " << HpolaronMax << endl;
+//		cout << "HpolaronMin is " << HpolaronMin << endl;
+//		cout << "a_rescaling is " << a_rescaling << endl;
+//		cout << "b_rescaling is " << b_rescaling << endl;
+//	}
+	/*
+	% --------- rescaled Hamiltonian -------------
+	 */
+	ierr = MatShift(Hpolaron,-b_scaling);CHKERRQ(ierr);
+	ierr = MatScale(Hpolaron,1.0/a_scaling);
+//	ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+//	//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+//	ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
+
+//	ierr = EPSSetOperators(eps,Hpolaron,NULL);CHKERRQ(ierr);
+//	ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr);
+//	ierr = EPSSolve(eps);CHKERRQ(ierr);
+//	ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
+//	ierr = PetscPrintf(PETSC_COMM_WORLD," Number of converged eigenpairs: %D\n\n",nconv);CHKERRQ(ierr);
+//	ierr = PetscViewerPushFormat(PETSC_VIEWER_STDOUT_WORLD,PETSC_VIEWER_ASCII_INFO_DETAIL);CHKERRQ(ierr);
+//	ierr = EPSReasonView(eps,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//	ierr = EPSErrorView(eps,EPS_ERROR_RELATIVE,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//	ierr = PetscViewerPopFormat(PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+
+	if (rank==0)    cout << "Characteristic Coherance Time: t_c=" << 1.0/(2.0*a_scaling/dim/L) << endl;
+	/*
+	 %---------------------------------------------------
+	    % -------- End of Cosntruction of Hamiltonian ------
+	    %=============================================================
+	    */
 	return ierr;
 }
 
 PetscErrorCode cHamiltonianMatrix::measurement(){
-	/* TODO: translate the measurement code.
-	 *
-	position=1;
-	% ------ Matrix Definition --------------
-	Mdensity1f0=zeros(L,Nt0);
-	Mdensity2f0=zeros(L,Nt0);
-	Mdensity1f=zeros(L,Nt);
-	Mdensity2f=zeros(L,Nt);
 
-	ALLdepart=zeros(Nt0+Nt,Ndis);
-	ALLentropy=zeros(Nt0+Nt,Ndis);
-
-	site2=zeros(1,N2);
-	site2(1)=position;
-	p2=index(site2,N2,L);%index of impurity particle, also the position on the lattice
-
-	rr=1-p2:1:L-p2;
-	mm=zeros(dim,1)+1;
-	rr=kron(rr',mm);%departure distance!
-	 *
-	 */
-	return ierr;
 	return ierr;
 }
 
@@ -241,16 +210,16 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianConstruction(){
 	  ierr = MatSeqAIJSetPreallocation(Hpolaron,DIM,NULL);CHKERRQ(ierr);
 
 	  ierr = MatGetOwnershipRange(Hpolaron,&rstart,&rend);CHKERRQ(ierr);
-//	  ierr = MatGetLocalSize(Hpolaron,&nlocal, NULL);CHKERRQ(ierr);
+	  ierr = MatGetLocalSize(Hpolaron,&nlocal, NULL);CHKERRQ(ierr);
 
 	  ierr = assemblance();CHKERRQ(ierr);
 
 	  ierr = MatAssemblyBegin(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
       ierr = MatAssemblyEnd(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
-//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
-	  ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
+//	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+////      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+//	  ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
 
 	  return ierr;
 }
@@ -534,39 +503,90 @@ void cHamiltonianMatrix::construct_basis(gsl_matrix *basis, const int spin_flag)
 }
 
 PetscErrorCode cHamiltonianMatrix::initial_state(){
-	/* TODO: translate the initial state construction code.
-		 *
-H0=zeros(L,L);
-En=zeros(1,L);
+	Mat H0;
+	PetscScalar kr,ki;
+	Vec            xr,xi;          /* real and imag part of eigenvectors */
+	ierr = MatCreate(PETSC_COMM_WORLD,&H0);CHKERRQ(ierr);
+	ierr = MatSetType(H0,MATMPIAIJ);CHKERRQ(ierr);
+	ierr = MatSetSizes(H0,PETSC_DECIDE,PETSC_DECIDE,L,L);CHKERRQ(ierr);
+	ierr = MatMPIAIJSetPreallocation(H0,2,NULL,2,NULL);CHKERRQ(ierr);
+	ierr = MatSeqAIJSetPreallocation(H0,2,NULL);CHKERRQ(ierr);
+	ierr = MatGetOwnershipRange(H0,&rstart,&rend);CHKERRQ(ierr);
+	int nonzeros;
+	for (ROW = rstart; ROW < rend; ++ROW) {
+		nonzeros = 0;
+		if (ROW==0) {
+			col[nonzeros] = 1; value[nonzeros] = -1.0; nonzeros++;
+		} else if (ROW==L-1) {
+			col[nonzeros] = L-2; value[nonzeros] = -1.0; nonzeros++;
+		} else {
+			col[nonzeros] = ROW-1; value[nonzeros] = -1.0; nonzeros++;
+			col[nonzeros] = ROW+1; value[nonzeros] = -1.0; nonzeros++;
+		}
+		if (nonzeros > 2) {
+			cerr << "single particle H0 is not constructed properly" << endl;exit(1);
+		} else {
+			ierr   = MatSetValues(H0,1,&ROW,nonzeros,col,value,INSERT_VALUES);CHKERRQ(ierr);
+		}
+	}
+	ierr = MatAssemblyBegin(H0,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+    ierr = MatAssemblyEnd(H0,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+	ierr = MatCreateVecs(H0,NULL,&xr);CHKERRQ(ierr);
+//	ierr = MatCreateVecs(H0,NULL,&xi);CHKERRQ(ierr);
+	ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
+	//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+	ierr = MatView(H0,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
 
-%======================================================================
-% ------------ Single Particle State (used to construct initial state) --------------------
-%----------------------------------------
-for j=1:L,
-    if j==1,
-        H0(j,j+1)=-1;
-    elseif j==L,
-        H0(j,j-1)=-1;
-    else
-        H0(j,j+1)=-1;
-        H0(j,j-1)=-1;
-    end
-end
-[phi,d]=eig(H0);
-for j=1:L,
-    En(j)=d(j,j);
-end
+	ierr = EPSSetOperators(eps,H0,NULL);CHKERRQ(ierr);
+	ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr);
+	ierr = EPSSetDimensions(eps,L,PETSC_DEFAULT,PETSC_DEFAULT);CHKERRQ(ierr);
+	ierr = EPSSolve(eps);CHKERRQ(ierr);
+	ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
+//	if (nconv>0) { // The printout tells us, in this case of matrix, the eigenvalue is in ascending order and eigenvectors are normalized (well, at least close to being normalized).
+// TODO: if it is not the case, use GSL sorting of eigenvalues and eigenvectors, https://www.gnu.org/software/gsl/manual/html_node/Sorting-Eigenvalues-and-Eigenvectors.html#Sorting-Eigenvalues-and-Eigenvectors
+	//		for (int i=0;i<nconv;i++) {
+//			ierr = EPSGetEigenpair(eps,i,&kr,NULL,xr,NULL);CHKERRQ(ierr);
+//			if (rank==0) {
+//				cout << i << "th eigenvalue is " << PetscRealPart(kr) << endl;
+//				ierr = VecView(xr,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//				ierr = VecView(xi,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//			}
+//		}
+//	}
+	// %initial state---zero temperature.
+	ierr = VecCreate(PETSC_COMM_WORLD,&X1);CHKERRQ(ierr);
+	ierr = VecSetSizes(X1,nlocal,DIM);CHKERRQ(ierr);
+	ierr = VecSetFromOptions(X1);CHKERRQ(ierr);
+	ierr = VecDuplicate(X1,&X2);CHKERRQ(ierr);
 
-% -- START: variable declare for each realization of disorder ----------
-    density1f0=zeros(L,Nt0);
-    density2f0=zeros(L,Nt0);
-    density1f=zeros(L,Nt);
-    density2f=zeros(L,Nt);
-    vector0=zeros(dim*dim2,1); % initial state vector
-    % -- END: variable declare for each realization of disorder ----------
+	gsl_vector * site2 = gsl_vector_alloc(N2);
+	gsl_vector_set(site2,0,position);
+	if (N2>1) for (int i = 1; i < N2; ++i) 	gsl_vector_set(site2,i,0);
+	int p2 = myindex(site2,N2); //%index of impurity particle, also the position on the lattice
+	double val_det;
+	gsl_matrix_complex *slater = gsl_matrix_complex_alloc(N,N);
+	gsl_complex val;
+	for (int jdim = 0; jdim < dim; ++jdim) {
+		for (int j1 = 0; j1 < N; ++j1) { // row
+			for (int j2 = 0; j2 < N; ++j2) { // col
+				ierr = EPSGetEigenpair(eps,j2,&kr,NULL,xr,NULL);CHKERRQ(ierr);
+				VecGetValues(xr,1,) // VecGetValues can only  get values on the same processor ... Let me abandon this and move to gsl instead...
+				gsl_matrix_get(basis1,j1-1,jdim),j2
 
-	 *
-	 */
+				gsl_matrix_complex_set(slater,j1,j2,val);
+			}
+		}
+
+		ierr = VecSetValue(X1,(p2-1)*dim+jdim,&val_det, INSERT_VALUES);
+	}
+
+
+	ierr = MatDestroy(&H0);CHKERRQ(ierr);
+	ierr = VecDestroy(&xr);CHKERRQ(ierr);
+//	ierr = VecDestroy(&xi);CHKERRQ(ierr);
+	gsl_vector_free(site2);
+	gsl_matrix_free(slater);
+	return ierr;
 }
 
 PetscErrorCode cHamiltonianMatrix::destruction(){
@@ -577,8 +597,8 @@ PetscErrorCode cHamiltonianMatrix::destruction(){
 	  gsl_vector_free(randV);
 	  ierr = EPSDestroy(&eps);CHKERRQ(ierr);
 	  ierr = MatDestroy(&Hpolaron);CHKERRQ(ierr);
-	  ierr = VecDestroy(&xr);CHKERRQ(ierr);
-	  ierr = VecDestroy(&xi);CHKERRQ(ierr);
+	  ierr = VecDestroy(&X1);CHKERRQ(ierr);
+	  ierr = VecDestroy(&X2);CHKERRQ(ierr);
 //	  cout << " do i have a seg fault?" << endl;
 	return ierr;
 }

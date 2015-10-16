@@ -21,20 +21,23 @@
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_complex_math.h>
 #include <sys/time.h>
 using namespace std;
 const PetscInt __MAXNOZEROS__ = 100; // TODO: This is the max number in a row --> theoretically largest recursion relation index given by the Hamiltonian.
 
 class cHamiltonianMatrix{
 private:
-  Vec            xr,xi;          /* RHS, test_exact solutions */
+  Vec            X1,X2;
   Mat            Hpolaron;
+
   EPS			 eps;
   EPSType		 type;
   gsl_matrix     *basis1, *basis2;
   gsl_vector	 *randV;
   PetscInt       ROW,COLUMN,rstart,rend,nlocal,col[__MAXNOZEROS__],nev,its,maxit,nconv;
-  PetscScalar    value[__MAXNOZEROS__],kr,ki;
+  PetscScalar    value[__MAXNOZEROS__],HpolaronMax,HpolaronMin,a_scaling, b_scaling;
+
 protected:
   PetscErrorCode ierr;
   PetscInt       N,N2,L,position;
