@@ -6,8 +6,8 @@ clc
 % Further: It should be further simplified by build a index matrix to avoid repeated
 % calculation!!
 
-L=3;
-N=1;
+L=4;
+N=2;
 N2=1;
 
 dim=factorial(L)/factorial(N)/factorial(L-N); % too large L or N will give non-number: NaN or Inf.

@@ -116,6 +116,7 @@ PetscErrorCode cHamiltonianMatrix::timeEvolutaion(){
 		//	    % -------- time-dependent evolution --------------
 		//	    %-------------------------------------------------
 	// Kernal Polynomial Method
+	ierr = KernalPolynomialMethod();CHKERRQ(ierr);
 
 	return ierr;
 }
@@ -127,10 +128,10 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
 	ierr = EPSCreate(PETSC_COMM_WORLD,&eps);CHKERRQ(ierr);
 	ierr = EPSSetOperators(eps,Hpolaron,NULL);CHKERRQ(ierr);
 	ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr);
-	PetscBool her;
-	ierr = EPSIsHermitian(eps, &her); CHKERRQ(ierr); if (rank==0) {cout << endl;cout << "is hermitian? " << her << endl;}
-	PetscBool pos;
-	ierr = EPSIsPositive(eps, &pos); CHKERRQ(ierr); if (rank==0) {cout << "is positive? " << pos << endl;cout << endl;}
+//	PetscBool her;
+//	ierr = EPSIsHermitian(eps, &her); CHKERRQ(ierr); if (rank==0) {cout << endl;cout << "is hermitian? (has to be) " << her << endl;}
+//	PetscBool pos;
+//	ierr = EPSIsPositive(eps, &pos); CHKERRQ(ierr); if (rank==0) {cout << "is positive? (not really)" << pos << endl;cout << endl;}
 //	ierr = EPSSetType(eps,EPSPOWER);CHKERRQ(ierr);
 	ierr = EPSSetWhichEigenpairs(eps,EPS_LARGEST_REAL);CHKERRQ(ierr);
 //	ierr = EPSSetFromOptions(eps);CHKERRQ(ierr);
@@ -182,6 +183,15 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
 	    % -------- End of Cosntruction of Hamiltonian ------
 	    %=============================================================
 	    */
+	return ierr;
+}
+
+PetscErrorCode cHamiltonianMatrix::KernalPolynomialMethod(){
+	double cutoff0 = round(3*PetscRealPart(a_scaling)*tmax);
+
+
+	// call measurement() at each time iteration.
+
 	return ierr;
 }
 
@@ -503,89 +513,65 @@ void cHamiltonianMatrix::construct_basis(gsl_matrix *basis, const int spin_flag)
 }
 
 PetscErrorCode cHamiltonianMatrix::initial_state(){
-	Mat H0;
-	PetscScalar kr,ki;
-	Vec            xr,xi;          /* real and imag part of eigenvectors */
-	ierr = MatCreate(PETSC_COMM_WORLD,&H0);CHKERRQ(ierr);
-	ierr = MatSetType(H0,MATMPIAIJ);CHKERRQ(ierr);
-	ierr = MatSetSizes(H0,PETSC_DECIDE,PETSC_DECIDE,L,L);CHKERRQ(ierr);
-	ierr = MatMPIAIJSetPreallocation(H0,2,NULL,2,NULL);CHKERRQ(ierr);
-	ierr = MatSeqAIJSetPreallocation(H0,2,NULL);CHKERRQ(ierr);
-	ierr = MatGetOwnershipRange(H0,&rstart,&rend);CHKERRQ(ierr);
-	int nonzeros;
-	for (ROW = rstart; ROW < rend; ++ROW) {
-		nonzeros = 0;
-		if (ROW==0) {
-			col[nonzeros] = 1; value[nonzeros] = -1.0; nonzeros++;
-		} else if (ROW==L-1) {
-			col[nonzeros] = L-2; value[nonzeros] = -1.0; nonzeros++;
+	gsl_matrix *H0 = gsl_matrix_alloc(L,L);
+	gsl_matrix_set_zero(H0);
+	for (int j = 0; j < L; ++j) {
+		if (j==0) {
+			gsl_matrix_set(H0,j,j+1,-1.0);
+		} else if(j==L-1){
+			gsl_matrix_set(H0,j,j-1,-1.0);
 		} else {
-			col[nonzeros] = ROW-1; value[nonzeros] = -1.0; nonzeros++;
-			col[nonzeros] = ROW+1; value[nonzeros] = -1.0; nonzeros++;
-		}
-		if (nonzeros > 2) {
-			cerr << "single particle H0 is not constructed properly" << endl;exit(1);
-		} else {
-			ierr   = MatSetValues(H0,1,&ROW,nonzeros,col,value,INSERT_VALUES);CHKERRQ(ierr);
+			gsl_matrix_set(H0,j,j+1,-1.0);
+			gsl_matrix_set(H0,j,j-1,-1.0);
 		}
 	}
-	ierr = MatAssemblyBegin(H0,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
-    ierr = MatAssemblyEnd(H0,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
-	ierr = MatCreateVecs(H0,NULL,&xr);CHKERRQ(ierr);
-//	ierr = MatCreateVecs(H0,NULL,&xi);CHKERRQ(ierr);
-	ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
-	//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
-	ierr = MatView(H0,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
-
-	ierr = EPSSetOperators(eps,H0,NULL);CHKERRQ(ierr);
-	ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr);
-	ierr = EPSSetDimensions(eps,L,PETSC_DEFAULT,PETSC_DEFAULT);CHKERRQ(ierr);
-	ierr = EPSSolve(eps);CHKERRQ(ierr);
-	ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
-//	if (nconv>0) { // The printout tells us, in this case of matrix, the eigenvalue is in ascending order and eigenvectors are normalized (well, at least close to being normalized).
-// TODO: if it is not the case, use GSL sorting of eigenvalues and eigenvectors, https://www.gnu.org/software/gsl/manual/html_node/Sorting-Eigenvalues-and-Eigenvectors.html#Sorting-Eigenvalues-and-Eigenvectors
-	//		for (int i=0;i<nconv;i++) {
-//			ierr = EPSGetEigenpair(eps,i,&kr,NULL,xr,NULL);CHKERRQ(ierr);
-//			if (rank==0) {
-//				cout << i << "th eigenvalue is " << PetscRealPart(kr) << endl;
-//				ierr = VecView(xr,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-//				ierr = VecView(xi,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-//			}
+//	for (int i = 0; i < L; ++i) {
+//		for (int j = 0; j < L; ++j) {
+//			cout << gsl_matrix_get(H0,i,j) << '\t' ;
 //		}
+//		cout << endl;
+//	}
+	gsl_vector *eval = gsl_vector_alloc (L);
+	gsl_matrix *evec = gsl_matrix_alloc (L, L);
+	gsl_eigen_symmv_workspace * w_symmv = gsl_eigen_symmv_alloc (L);
+	gsl_eigen_symmv (H0, eval, evec, w_symmv);
+	gsl_eigen_symmv_free (w_symmv);
+	gsl_eigen_symmv_sort (eval, evec, GSL_EIGEN_SORT_VAL_ASC);
+//	for (int i = 0; i < L; ++i) {
+//		cout << i+1 << "th eigenvalue is " <<  gsl_vector_get (eval, i) << endl;
+//		gsl_vector_view evec_i = gsl_matrix_column (evec, i);
+//		gsl_vector_fprintf (stdout, &evec_i.vector, "%g");
 //	}
 	// %initial state---zero temperature.
 	ierr = VecCreate(PETSC_COMM_WORLD,&X1);CHKERRQ(ierr);
 	ierr = VecSetSizes(X1,nlocal,DIM);CHKERRQ(ierr);
 	ierr = VecSetFromOptions(X1);CHKERRQ(ierr);
 	ierr = VecDuplicate(X1,&X2);CHKERRQ(ierr);
-
 	gsl_vector * site2 = gsl_vector_alloc(N2);
 	gsl_vector_set(site2,0,position);
 	if (N2>1) for (int i = 1; i < N2; ++i) 	gsl_vector_set(site2,i,0);
 	int p2 = myindex(site2,N2); //%index of impurity particle, also the position on the lattice
 	double val_det;
-	gsl_matrix_complex *slater = gsl_matrix_complex_alloc(N,N);
-	gsl_complex val;
+	gsl_matrix *slater = gsl_matrix_alloc(N,N);
+	gsl_permutation *p = gsl_permutation_alloc(slater->size1);
+	int signum;
 	for (int jdim = 0; jdim < dim; ++jdim) {
 		for (int j1 = 0; j1 < N; ++j1) { // row
 			for (int j2 = 0; j2 < N; ++j2) { // col
-				ierr = EPSGetEigenpair(eps,j2,&kr,NULL,xr,NULL);CHKERRQ(ierr);
-				VecGetValues(xr,1,) // VecGetValues can only  get values on the same processor ... Let me abandon this and move to gsl instead...
-				gsl_matrix_get(basis1,j1-1,jdim),j2
-
-				gsl_matrix_complex_set(slater,j1,j2,val);
+				gsl_matrix_set(slater,j1,j2,gsl_matrix_get(evec, gsl_matrix_get(basis1,j1,jdim)-1,j2));
 			}
 		}
-
-		ierr = VecSetValue(X1,(p2-1)*dim+jdim,&val_det, INSERT_VALUES);
+		gsl_linalg_LU_decomp(slater , p , &signum); // cout << "rank " << rank << " has signum " << signum << endl;
+		val_det = gsl_linalg_LU_det(slater , signum);
+//		cout << jdim+1 << "th slater det is " << val_det << endl;
+		ierr = VecSetValue(X1,(p2-1)*dim+jdim,val_det, INSERT_VALUES); // X1 is the initial state vector0.
 	}
-
-
-	ierr = MatDestroy(&H0);CHKERRQ(ierr);
-	ierr = VecDestroy(&xr);CHKERRQ(ierr);
-//	ierr = VecDestroy(&xi);CHKERRQ(ierr);
+	gsl_permutation_free (p);
 	gsl_vector_free(site2);
 	gsl_matrix_free(slater);
+	gsl_vector_free (eval);
+	gsl_matrix_free (evec);
+	gsl_matrix_free (H0);
 	return ierr;
 }
 

@@ -21,7 +21,10 @@
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_rng.h>
-#include <gsl/gsl_complex_math.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_eigen.h>
+#include <gsl/gsl_permutation.h>
 #include <sys/time.h>
 using namespace std;
 const PetscInt __MAXNOZEROS__ = 100; // TODO: This is the max number in a row --> theoretically largest recursion relation index given by the Hamiltonian.
@@ -52,7 +55,6 @@ protected:
 public:
   cHamiltonianMatrix(){}
   ~cHamiltonianMatrix(){}
-  PetscErrorCode measurement();
   PetscErrorCode destruction();
   PetscErrorCode input();
   PetscErrorCode fock();
@@ -71,5 +73,7 @@ public:
   void compute_col_index(const int, const int, const int );
   int myindex(gsl_vector *, const int);
   PetscErrorCode initial_state();
+  PetscErrorCode KernalPolynomialMethod();
+  PetscErrorCode measurement();
 };
 #endif
