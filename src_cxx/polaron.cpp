@@ -75,20 +75,20 @@ PetscErrorCode cHamiltonianMatrix::fock(){
 	spin_flag = 2;
 	basis2 = gsl_matrix_alloc(N2,dim2);
 	construct_basis(basis2, spin_flag);
-		if (rank == 0){ // only root CPU prints the result to screen.
-			for (int i = 0; i < N; ++i) {
-				for (int j = 0; j < dim; ++j) {
-					cout << gsl_matrix_get(basis1,i,j) << '\t';
-				}
-				cout << "EOL" << endl;
-			}
-			for (int i = 0; i < N2; ++i) {
-				for (int j = 0; j < dim2; ++j) {
-					cout << gsl_matrix_get(basis2,i,j) << '\t';
-				}
-				cout << "EOL" << endl;
-			}
-		}
+//		if (rank == 0){ // only root CPU prints the result to screen.
+//			for (int i = 0; i < N; ++i) {
+//				for (int j = 0; j < dim; ++j) {
+//					cout << gsl_matrix_get(basis1,i,j) << '\t';
+//				}
+//				cout << "EOL" << endl;
+//			}
+//			for (int i = 0; i < N2; ++i) {
+//				for (int j = 0; j < dim2; ++j) {
+//					cout << gsl_matrix_get(basis2,i,j) << '\t';
+//				}
+//				cout << "EOL" << endl;
+//			}
+//		}
 	return ierr;
 }
 
@@ -155,8 +155,8 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
 //	if (rank==0) {
 //		cout << "HpolaronMax is " << HpolaronMax << endl;
 //		cout << "HpolaronMin is " << HpolaronMin << endl;
-//		cout << "a_rescaling is " << a_rescaling << endl;
-//		cout << "b_rescaling is " << b_rescaling << endl;
+//		cout << "a_scaling is " << a_scaling << endl;
+//		cout << "a_scaling is " << b_scaling << endl;
 //	}
 	/*
 	% --------- rescaled Hamiltonian -------------
@@ -228,7 +228,7 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianConstruction(){
       ierr = MatAssemblyEnd(Hpolaron,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
 //	  ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_DENSE  );CHKERRQ(ierr);
-////      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+//      ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
 //	  ierr = MatView(Hpolaron,	PETSC_VIEWER_STDOUT_WORLD );CHKERRQ(ierr);
 
 	  return ierr;
@@ -279,16 +279,22 @@ int cHamiltonianMatrix::myindex(gsl_vector * site, const int _N_){
 		p = gsl_vector_get(site,0);
 	} else {
 		int loop = 1;
-		for (int i = 1; i <= gsl_vector_get(site,loop-1)-1; ++i) {
+		for (int i = 1; i <= gsl_vector_get(site,loop-1)-1; i++) {
 			p += gsl_sf_choose(L-i,_N_-loop);
 		}
 		loop ++;
-		do {
-			for (int i = gsl_vector_get(site,loop-2)+1; i < gsl_vector_get(site,loop-1)-1; ++i) {
+//		do {
+//			for (int i = gsl_vector_get(site,loop-2)+1; i <= gsl_vector_get(site,loop-1)-1; i++) { // I previously made a mistake here too, of having i < gsl_vector_get(site,loop-1)-1
+//				p += gsl_sf_choose(L-i,_N_-loop);
+//			}
+//			loop ++;
+//		} while (loop<_N_);
+		// The above code use do-while loop, which is different from the while loop in matlab. Off by one error...
+		for(loop=2;loop<_N_;loop++){
+			for (int i = gsl_vector_get(site,loop-2)+1; i <= gsl_vector_get(site,loop-1)-1; i++) {
 				p += gsl_sf_choose(L-i,_N_-loop);
 			}
-			loop ++;
-		} while (loop<_N_);
+		}
 		p += gsl_vector_get(site,_N_-1)-gsl_vector_get(site,_N_-2); // % that's fine!
 	}
 
@@ -314,7 +320,14 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 		exit(1);
 	}
 	gsl_vector * site = gsl_vector_alloc(_N); // TODO: why in construct basis member function, the alloc size is _N+1?
-
+//	if (rank == 0){ // only root CPU prints the result to screen.
+//		for (int i = 0; i < _N; ++i) {
+//			for (int j = 0; j < _dim; ++j) {
+//				cout << gsl_matrix_get(basis,i,j) << '\t';
+//			}
+//			cout << "EOL" << endl;
+//		}
+//	}
 	for (int jpar = 1; jpar <= _N; ++jpar) {
 	// ------------- Start: Boundary term -------------
 		if (boundary==0){ // #Periodic Boundary Conditions
@@ -333,7 +346,12 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 						gsl_vector_set(site,nnn,gsl_matrix_get(basis,nnn-1,jdim));
 					}
 					gsl_vector_set(site,0,1);
+//					for (int i = 0; i < _N; ++i) {
+//						cout << gsl_vector_get(site,i) << '\t';
+//					}
+//					cout << endl;
 					q = myindex(site,_N);
+//					cout << "jpar = " << jpar << "q = " << q << endl;
 				}
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
@@ -356,20 +374,19 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 				}
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
-		} //else { // TODO: Do we consider boundary==1 case or other?
+		}
+
+		//else { // TODO: Do we consider boundary==1 case or other?
 	// ------------- End: Boundary term -------------.
 			if ( (jpar< _N && gsl_matrix_get(basis,jpar-1,jdim)+1<gsl_matrix_get(basis,jpar,jdim)) || (jpar==_N && gsl_matrix_get(basis,jpar-1,jdim)<L) ) {
-/*
- *                     site=basis1(:,jdim1);
-                    site(jpar)=site(jpar)+1;
- */
 //				cout << "i am the first condition" << endl;
 //				cout << "jpar = " << jpar << " jdim = " << jdim << endl;
 
 				for (int nnn = 0; nnn < _N; ++nnn) {
 					gsl_vector_set(site,nnn,gsl_matrix_get(basis,nnn,jdim));
 				}
-				gsl_vector_set(site,jpar-1,gsl_vector_get(site,jpar-1)+1);
+				int tmpint = gsl_vector_get(site,jpar-1);
+				gsl_vector_set(site,jpar-1,tmpint+1);
 
 //				cout << "site is" << endl;
 //				for (int var = 0; var < _N; ++var) {
@@ -381,17 +398,14 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
                 compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
 			if ((jpar==1 && gsl_matrix_get(basis,jpar-1,jdim)>1) || (jpar>1 && gsl_matrix_get(basis,jpar-1,jdim)-1>gsl_matrix_get(basis,jpar-2,jdim))) {
-			/*
-			 *                     site=basis1(:,jdim1);
-                    site(jpar)=site(jpar)-1;
-			 */
 //				cout << "i am the second condition" << endl;
 //				cout << "jpar = " << jpar << " jdim = " << jdim << endl;
 
 				for (int nnn = 0; nnn < _N; ++nnn) {
 					gsl_vector_set(site,nnn,gsl_matrix_get(basis,nnn,jdim));
 				}
-				gsl_vector_set(site,jpar-1,gsl_vector_get(site,jpar-1)-1);
+				int tmpint = gsl_vector_get(site,jpar-1);
+				gsl_vector_set(site,jpar-1,tmpint-1);
 
 //				cout << "site is" << endl;
 //				for (int var = 0; var < _N; ++var) {
@@ -403,6 +417,7 @@ void cHamiltonianMatrix::compute_hopping(int &nonzeros,const int spin_flag){
 				compute_col_index(nonzeros,spin_flag,q);nonzeros++;
 			}
 		//}
+
 	}
 	gsl_vector_free (site);
 }
@@ -566,6 +581,10 @@ PetscErrorCode cHamiltonianMatrix::initial_state(){
 //		cout << jdim+1 << "th slater det is " << val_det << endl;
 		ierr = VecSetValue(X1,(p2-1)*dim+jdim,val_det, INSERT_VALUES); // X1 is the initial state vector0.
 	}
+	ierr =  VecAssemblyBegin(X1); CHKERRQ(ierr);
+	ierr =  VecAssemblyEnd(X1); CHKERRQ(ierr);
+//	ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,PETSC_VIEWER_ASCII_MATLAB);
+//	ierr = VecView(X1,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 	gsl_permutation_free (p);
 	gsl_vector_free(site2);
 	gsl_matrix_free(slater);
