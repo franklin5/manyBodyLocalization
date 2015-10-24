@@ -29,7 +29,8 @@ int main(int argc,char **args){
   cHamiltonianMatrix Hpolaron;
   Hpolaron.input();
   Hpolaron.fock();
-  Hpolaron.timeEvolutaion();
+  Hpolaron.timeEvolution();
+  Hpolaron.measurement();
   Hpolaron.destruction();
   ierr = SlepcFinalize();
   return 0;

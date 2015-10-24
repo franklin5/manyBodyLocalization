@@ -7,6 +7,7 @@ PetscErrorCode cHamiltonianMatrix::input(){
 	MPI_Comm_size(PETSC_COMM_WORLD,&size);
 	MPI_Comm_rank(PETSC_COMM_WORLD,&rank);
 //	cout << rank << '\t' << size << endl;
+	cout.precision(16);
 	for (int ig = 0; ig < size; ++ig) {
 	    if (ig ==rank){
 	    	char dummyname[100];
@@ -38,16 +39,19 @@ PetscErrorCode cHamiltonianMatrix::input(){
 	        fscanf(input,"%s %lf", dummyname, &dummyvalue);
 	        U = dummyvalue;    if (ig == 0) cout << "Interaction" << dummyname << "=" << U << endl;
 	        fscanf(input,"%s %lf", dummyname, &dummyvalue);
-	        tmax = dummyvalue;    if (ig == 0) cout << "Total time tmax=" << dummyname << "=" << tmax << endl;
+	        tmax = dummyvalue;    if (ig == 0) cout << "Total time " << dummyname << "=" << tmax << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        Nt = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << Nt << endl;
-	    	dt=log(tmax)/Nt; if (ig == 0) cout << "time steps in log time scale = " << dt << endl;
+	    	dt=log(tmax)/Nt; if (ig == 0) cout << "time steps in log time scale = "  << dt << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        judge = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << judge << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        boundary = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << boundary << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        position = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << position << endl;
+	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
+	        set_gsl_under_flow_ratio = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << set_gsl_under_flow_ratio << endl;
+
 	        fclose(input);
 	        if (ig == 0) {
 	        	if (judge==0) {
@@ -92,19 +96,19 @@ PetscErrorCode cHamiltonianMatrix::fock(){
 	return ierr;
 }
 
-PetscErrorCode cHamiltonianMatrix::timeEvolutaion(){
+PetscErrorCode cHamiltonianMatrix::timeEvolution(){
 	randV = gsl_vector_alloc(L);
 	randomPotential(randV);
-	for (int ig = 0; ig < size; ++ig) { // I have to make sure the generated random number potential is the same across all CPUs.
-		    if (ig ==rank){
-		    	cout << "rank " << rank << " has rand numbers:" << '\t';
-				cout.precision(16);
-		    	for (int i = 0; i < L; i++) {
-					cout << gsl_vector_get(randV,i) << '\t';
-				}
-				cout << endl;
-		    }
-	}
+//	for (int ig = 0; ig < size; ++ig) { // I have to make sure the generated random number potential is the same across all CPUs.
+//		    if (ig ==rank){
+//		    	cout << "rank " << rank << " has rand numbers:" << '\t';
+//				cout.precision(16);
+//		    	for (int i = 0; i < L; i++) {
+//					cout << gsl_vector_get(randV,i) << '\t';
+//				}
+//				cout << endl;
+//		    }
+//	}
 
 	ierr = hamiltonianConstruction();CHKERRQ(ierr);
 
@@ -152,12 +156,12 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
 	double epsilon_cut_off = 0.01;
 	a_scaling = PetscRealPart(HpolaronMax-HpolaronMin)/(2.0-epsilon_cut_off);
 	b_scaling = PetscRealPart(HpolaronMax+HpolaronMin)/2.0;
-//	if (rank==0) {
-//		cout << "HpolaronMax is " << HpolaronMax << endl;
-//		cout << "HpolaronMin is " << HpolaronMin << endl;
-//		cout << "a_scaling is " << a_scaling << endl;
-//		cout << "a_scaling is " << b_scaling << endl;
-//	}
+	if (rank==0) {
+		cout << "HpolaronMax is " << HpolaronMax << endl;
+		cout << "HpolaronMin is " << HpolaronMin << endl;
+		cout << "a_scaling is " << a_scaling << endl;
+		cout << "b_scaling is " << b_scaling << endl;
+	}
 	/*
 	% --------- rescaled Hamiltonian -------------
 	 */
@@ -187,16 +191,96 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
 }
 
 PetscErrorCode cHamiltonianMatrix::KernalPolynomialMethod(){
-	double cutoff0 = round(3*PetscRealPart(a_scaling)*tmax);
+	int cutoff0 = int(3.0*a_scaling*tmax);
+	if (rank==0) cout << "cutoff is chosen as " << cutoff0 << endl;
+	ierr = VecDuplicate(X1,&X3);CHKERRQ(ierr);
+	ierr = VecDuplicateVecs(X1,Nt,&WFt);CHKERRQ(ierr);
+	for(int i = 0; i<Nt; ++i) {ierr = VecZeroEntries(WFt[i]);CHKERRQ(ierr);}
 
+	ierr = VecCopy(X1,X3);CHKERRQ(ierr);  // TODO: avoid the copy for efficiency.
+	WaveFunctionUpdate(0);
+	ierr = MatMult(Hpolaron,X1,X2);CHKERRQ(ierr);
+	ierr = VecCopy(X2,X3);CHKERRQ(ierr);	// TODO: avoid the copy for efficiency.
+	WaveFunctionUpdate(1);
+	for (int iter_k = 2; iter_k <= cutoff0; ++iter_k) {
+		ierr = MatMult(Hpolaron,X2,X3);CHKERRQ(ierr);
+		ierr = VecScale(X3,2.0);CHKERRQ(ierr);
+		ierr = VecAXPY(X3,-1.0,X1);CHKERRQ(ierr);
+		WaveFunctionUpdate(iter_k);
+		ierr = VecCopy(X2,X1);CHKERRQ(ierr);
+		ierr = VecCopy(X3,X2);CHKERRQ(ierr);
+		if(iter_k%int(cutoff0*0.1)==0) if (rank==0) cout << iter_k << "th iteration within total of " << cutoff0 << " cutoff has finished." << endl;
+	}
+//	for (int itime = 0; itime < Nt; ++itime) {
+//		ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+//		ierr = VecView(WFt[itime],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//	}
 
-	// call measurement() at each time iteration.
+//	ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+//	ierr = VecView(WFt[1],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//	ierr = VecView(WFt[2],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//	ierr = VecView(WFt[3],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//	ierr = VecView(WFt[Nt-1],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+	return ierr;
+}
 
+PetscErrorCode cHamiltonianMatrix::WaveFunctionUpdate(const int k){
+	double prefactor;
+	if (k==0) {
+		prefactor = 1.0;
+	} else {
+		prefactor = 2.0;
+	}
+	PetscScalar coeff;
+	for (int itime = 0; itime < Nt; ++itime) {
+		if (a_scaling*dt*itime*set_gsl_under_flow_ratio>=k) { // if GSL underflow error occurs, try to decrease the factor relation, but the price to pay is mostly inaccuracies in small time steps.
+			// This is to avoid underflow in GSL error, which means the bessel function is too small to be computed reliably. MATLAB decides this behavior too, by setting it to zero, if it is too small (underflow).
+			// using emperical factor relation of discarding the less cases
+			coeff = prefactor*PetscPowComplex(-1.0*PETSC_i,k)* gsl_sf_bessel_Jn(k,a_scaling*dt*itime);
+			ierr = VecAXPY(WFt[itime],coeff,X3);CHKERRQ(ierr);
+		}
+	}
 	return ierr;
 }
 
 PetscErrorCode cHamiltonianMatrix::measurement(){
+	double	 *ALLdepart = new double[Nt];
+	double var_rank;
+	PetscScalar var_tmp;
+	gsl_matrix*	RDM = gsl_matrix_alloc(dim2,dim2);
+	gsl_vector*	vectort = gsl_vector_alloc(DIM);
+	for (int itime = 0; itime < Nt; ++itime) {
 
+		// % ## departure ##
+		var_rank = 0.0;
+		for (int ivar = rstart; ivar < rend; ++ivar) {
+			ierr = VecGetValues(WFt[itime],1,&ivar,&var_tmp);CHKERRQ(ierr);
+			var_rank += pow(gsl_vector_get(rr,ivar)*PetscAbsComplex(var_tmp),2);
+		}
+		MPI_Reduce(&var_rank, &(ALLdepart[itime]), 1, MPI_DOUBLE, MPI_SUM, 0, PETSC_COMM_WORLD);
+		ALLdepart[itime] = sqrt(ALLdepart[itime]);
+		// % ## entropy ##
+
+
+
+
+
+		// % ## density distribution of impurity fermion
+
+		// % ## density distribution of majority fermions
+
+	}
+
+	if (rank == 0) {
+		cout << "departure at time t is " << endl;
+		for (int itime = 0; itime < Nt; ++itime) {
+			cout << dt*itime << '\t' << ALLdepart[itime] << endl;
+		}
+	}
+
+	gsl_matrix_free(RDM);
+	gsl_vector_free(vectort);
+	delete[] ALLdepart;
 	return ierr;
 }
 
@@ -566,6 +650,21 @@ PetscErrorCode cHamiltonianMatrix::initial_state(){
 	gsl_vector_set(site2,0,position);
 	if (N2>1) for (int i = 1; i < N2; ++i) 	gsl_vector_set(site2,i,0);
 	int p2 = myindex(site2,N2); //%index of impurity particle, also the position on the lattice
+	rr = gsl_vector_alloc (DIM);
+	// Translation of the matlab code...
+//	rr=1-p2:1:L-p2;
+//	mm=ones(dim,1);
+//	rr=kron(rr',mm);%departure distance!
+	for (int irr = 0; irr < dim2; ++irr) {
+		for (int imm = 0; imm < dim; ++imm) {
+			gsl_vector_set(rr,irr*dim+imm,1-p2+irr);
+		}
+	}
+//	if (rank==0){
+//		for (int ivar = 0; ivar < DIM; ++ivar) {
+//			cout << gsl_vector_get(rr,ivar) << endl;
+//		}
+//	}
 	double val_det;
 	gsl_matrix *slater = gsl_matrix_alloc(N,N);
 	gsl_permutation *p = gsl_permutation_alloc(slater->size1);
@@ -604,6 +703,9 @@ PetscErrorCode cHamiltonianMatrix::destruction(){
 	  ierr = MatDestroy(&Hpolaron);CHKERRQ(ierr);
 	  ierr = VecDestroy(&X1);CHKERRQ(ierr);
 	  ierr = VecDestroy(&X2);CHKERRQ(ierr);
+	  ierr = VecDestroy(&X3);CHKERRQ(ierr);
+	  ierr = VecDestroyVecs(Nt,&WFt);CHKERRQ(ierr);
+	  gsl_vector_free(rr);
 //	  cout << " do i have a seg fault?" << endl;
 	return ierr;
 }
@@ -623,7 +725,8 @@ void cHamiltonianMatrix::randomPotential(gsl_vector* randV){
 	  // the gettimeofday() solution, might be better its level of accuracy is enough:
 	  unsigned long int seed_number;
 	  if (rank == 0) {
-		  seed_number = random_seed();
+		  seed_number = 0; // debug purpose.
+//		  seed_number = random_seed();
 //		  cout << "Before broadcasting, seed number is " << seed_number << endl;
 	  }
 	  MPI_Bcast(&seed_number, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD); //replace MPI_INT by MPI_UNSIGNED_LONG if int is not long enough.

@@ -25,22 +25,25 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_eigen.h>
 #include <gsl/gsl_permutation.h>
+#include <gsl/gsl_sf_bessel.h>
 #include <sys/time.h>
 using namespace std;
 const PetscInt __MAXNOZEROS__ = 100; // TODO: This is the max number in a row --> theoretically largest recursion relation index given by the Hamiltonian.
 
 class cHamiltonianMatrix{
 private:
-  Vec            X1,X2;
+  Vec            X1,X2,X3;
   Mat            Hpolaron;
-
+  Vec*			 WFt;
   EPS			 eps;
   EPSType		 type;
   gsl_matrix     *basis1, *basis2;
   gsl_vector	 *randV;
   PetscInt       ROW,COLUMN,rstart,rend,nlocal,col[__MAXNOZEROS__],nev,its,maxit,nconv;
-  PetscScalar    value[__MAXNOZEROS__],HpolaronMax,HpolaronMin,a_scaling, b_scaling;
-
+  PetscScalar    value[__MAXNOZEROS__],HpolaronMax,HpolaronMin;
+  double		 a_scaling, b_scaling;
+  int			 set_gsl_under_flow_ratio;
+  gsl_vector *	 rr;
 protected:
   PetscErrorCode ierr;
   PetscInt       N,N2,L,position;
@@ -49,9 +52,9 @@ protected:
   	  	  	  	  	  	  	  	  // boundary=1; % @Open Boundary
   	  	  	  	  	  	  	  	  // boundary=0; % @Periodic Boundary
   PetscInt		 dim, dim2,DIM;   // Derived parameters: too large L or N will give non-number: NaN or Inf.
-  PetscReal      W,U,tmax,Nt, dt,tol,error,re,im;
+  double	     W,U,tmax, dt,tol,error,re,im;
   PetscMPIInt    rank, size;
-  int 			 _jdim1, _jdim2;
+  int 			 _jdim1, _jdim2,Nt;
 public:
   cHamiltonianMatrix(){}
   ~cHamiltonianMatrix(){}
@@ -59,7 +62,7 @@ public:
   PetscErrorCode input();
   PetscErrorCode fock();
   void construct_basis(gsl_matrix *, const int);
-  PetscErrorCode timeEvolutaion();
+  PetscErrorCode timeEvolution();
   void randomPotential(gsl_vector*);
   PetscErrorCode hamiltonianConstruction();
   PetscErrorCode hamiltonianRescaling();
@@ -75,5 +78,6 @@ public:
   PetscErrorCode initial_state();
   PetscErrorCode KernalPolynomialMethod();
   PetscErrorCode measurement();
+  PetscErrorCode WaveFunctionUpdate(const int);
 };
 #endif

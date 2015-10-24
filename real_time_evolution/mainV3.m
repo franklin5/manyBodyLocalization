@@ -18,15 +18,12 @@ N2=1;
 W=10;
 U=1;
 
-tmax=2990;%Calculation time is proportional to tmax!!!
-Nt=200;
-dt=tmax/Nt;
 
 tmax0=10;
-Nt0=200;
-dt0=tmax0/Nt0;
+Nt0=50;
+dt0=log(tmax0)/Nt0;
 
-Ndis=200;
+Ndis=1;
 
 position=1;
 
@@ -41,15 +38,13 @@ for jdis=1:Ndis,
     % -- START: variable declare for each realization of disorder ----------
     density1f0=zeros(L,Nt0);
     density2f0=zeros(L,Nt0);
-    density1f=zeros(L,Nt);
-    density2f=zeros(L,Nt);
     vector0=zeros(dim*dim2,1); % initial state vector
     % -- END: variable declare for each realization of disorder ----------
     
     tic; % CLOCK I: time for each loop!!
     
-    randV=-W/2+W*rand([1,L]); % generate a random on-site potential within [-W/2,W/2];
-    
+    %randV=-W/2+W*rand([1,L]); % generate a random on-site potential within [-W/2,W/2];
+    randV=[ 4.99741748906672        -3.370901246089488      -2.173821947071701      4.472010820172727];
     Construction;
     
     % --------- rescaled Hamiltonian -------------
@@ -97,6 +92,7 @@ for jdis=1:Ndis,
     % ------- first stage: [0,tmax0] ------------ 
     tic;
     cutoff0=round(3*a*tmax0);
+    %cutoff0=21;Nt0=2;dt0=1.700598690831078;
     listY=0:dt0:(Nt0-1)*dt0;
     listX=1:1:cutoff0;listX=listX';
     timelist=kron(listX*0+1,listY);
@@ -125,6 +121,7 @@ for jdis=1:Ndis,
         vectort=WFt0(:,jt);
         % ## departure ##
         ALLdepart(jt,jdis)=sqrt(sum(rr.^2.*abs(vectort).^2));
+        
         % ## entropy ##
         RDM=zeros(dim2,dim2);
         for row2=1:dim2,
@@ -139,6 +136,7 @@ for jdis=1:Ndis,
         end
         [v,d]=eig(RDM);
         ALLentropy(jt,jdis)=-trace(d.*log(d));
+        %{
         % ## density distribution of impurity fermion
         for j1=1:dim,
             for j2=1:dim2,
@@ -154,7 +152,8 @@ for jdis=1:Ndis,
                     density1f0(basis1(jn,j1),jt)=density1f0(basis1(jn,j1),jt)+abs(vectort((j2-1)*dim+j1))^2;
                 end
             end
-        end        
+        end
+%}    
     end
     %---- Measurement I end -----------
     %--------------------------------------------
@@ -162,139 +161,11 @@ for jdis=1:Ndis,
     fprintf('## Time of First Stage Evolution: %10.2f \n',clock3);
     
     
-    % -------- second stage: [tmax0,tmax] ----------
-    cutoff=round(1.5*a*tmax);
-    fprintf('Cutoff of Chebyshev Expansion: cutoff= %d \n', cutoff);
-    tic; %CLOCK 3: time of Coeff
-    listY=0:dt:(Nt-1)*dt;
-    listX=1:1:cutoff;listX=listX';
-    timelist=kron(listX*0+1,listY);
-    cutofflist=kron(listX,listY*0+1);
-    coeff=(-1i).^(cutofflist-1).*besselj(cutofflist-1,a*timelist);%coeff(cutoff,Nt)
-    clock4=toc; %END CLOCK 3
-    fprintf('## Time of Second Stage---Coeffecients: %10.2f \n',clock4);
-    
-    %-----------------------------------------------------
-    % --------- START: time evolution --------------
-    tic;
-    X1=vectort;
-    WFt=zeros(dim*dim2,Nt);
-    WFt=WFt+X1*coeff(1,:);
-    X2=Hpolaron2*X1;
-    WFt=WFt+2*X2*coeff(2,:);
-    
-    for j=3:cutoff,
-        X3=2*Hpolaron2*X2-X1;
-        WFt=WFt+2*X3*coeff(j,:);
-        X1=X2;X2=X3;
-        if mod(j,4000)==0
-           toc
-           disp('j=')
-           j
-           tic
-           save('/scratch/ly15/WaveFunctiongT01.mat','WFt','X1','X2','j');
-        end
-    end
-    save('/scratch/ly15/WaveFunctiongT01.mat','WFt');
-    clock5=toc;
-    fprintf('## Time of Second Stage Time Evolution: %10.2f \n',clock5);
-    %  ---------- END: time evolution ---------------
-    %-------------------------------------------------------
-    
-    %-------------------------------------------------------
-    %  ---------- Measurement of density, entropy, departure  ---------------
-    tic;
-    for jt=1:Nt,
-        vectort=WFt(:,jt);
-        % departure
-        ALLdepart(jt+Nt0,jdis)=sqrt(sum(rr.^2.*abs(vectort).^2));
-        % entropy
-        RDM=zeros(dim2,dim2);
-        for row2=1:dim2,
-            for col2=row2:dim2,
-                for jjj=1:dim,
-                    RDM(row2,col2)=RDM(row2,col2)+vectort((row2-1)*dim+jjj)*vectort((col2-1)*dim+jjj)';
-                end
-                if col2~=row2,
-                    RDM(col2,row2)=RDM(row2,col2)';
-                end
-            end
-        end
-        [v,d]=eig(RDM);
-        ALLentropy(jt+Nt0,jdis)=-trace(d.*log(d));
-        % impurity fermion density
-        for j1=1:dim,
-            for j2=1:dim2,
-                for jn2=1:N2,
-                    density2f(basis2(jn2,j2),jt)=density2f(basis2(jn2,j2),jt)+abs(vectort((j2-1)*dim+j1))^2;
-                end
-            end
-        end
-        % majority fermions density
-        for j2=1:dim2,
-            for j1=1:dim,
-                for jn=1:N,
-                    density1f(basis1(jn,j1),jt)=density1f(basis1(jn,j1),jt)+abs(vectort((j2-1)*dim+j1))^2;
-                end
-            end
-        end
-        
-    end
-    clock6=toc;
-    fprintf('## Time of Second Stage----Measurement: %10.2f \n',clock6);
-    
-    Mdensity2f0=Mdensity2f0+density2f0;
-    Mdensity1f0=Mdensity1f0+density1f0;
-    
-    Mdensity2f=Mdensity2f+density2f;
-    Mdensity1f=Mdensity1f+density1f;
-    
-    %-------------------------------------------------------------------------------
-    % -------------- Start measurement of Energy ------------
-    fprintf('=======================================================================\n');
-    fprintf('----------- Start Measurement of Energy -----------------------\n');
-    
-    EimpKin=zeros(1,Nt0+Nt);
-    EimpPot=zeros(1,Nt0+Nt);
-    EmajKin=zeros(1,Nt0+Nt);
-    EmajPot=zeros(1,Nt0+Nt);
-    Eint=zeros(1,Nt0+Nt);
-    
-    % construction of impurity Hamiltonian
-    HimpKin=HimpurityKinetic(dim,dim2,L,N2,boundary,basis2);
-    HimpPot=HimpurityPotential(randV,dim,dim2,N2,basis2);
-    
-    HmajKin=HmajorityKinetic(dim,dim2,L,N,boundary,basis1);
-    HmajPot=HmajorityPotential(randV,dim,dim2,N,basis1,judge);
-    
-    Hint=Hinteraction(U,dim,dim2,N,N2,basis1,basis2);
-    for jt0=1:Nt0,
-        vectort=WFt0(:,jt0);
-        EimpKin(jt0)=vectort'*HimpKin*vectort;
-        EimpPot(jt0)=vectort'*HimpPot*vectort;
-        EmajKin(jt0)=vectort'*HmajKin*vectort;
-        EmajPot(jt0)=vectort'*HmajPot*vectort;
-        Eint(jt0)=vectort'*Hint*vectort;
-    end
-    for jt=1:Nt,
-        vectort=WFt(:,jt);
-        EimpKin(jt+Nt0)=vectort'*HimpKin*vectort;
-        EimpPot(jt+Nt0)=vectort'*HimpPot*vectort;
-        EmajKin(jt+Nt0)=vectort'*HmajKin*vectort;
-        EmajPot(jt+Nt0)=vectort'*HmajPot*vectort;
-        Eint(jt+Nt0)=vectort'*Hint*vectort;
-    end
-    fprintf('----------- Measurement of Energy Finished! -----------\n')
-    %========================================================
-    %   XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-    %====================================================================
-    
-    clock1=toc; % END OF CLOCK I
-    fprintf('$$ Loop %d Finished!', jdis);
-    fprintf('---------------------------------------------------------- \n');
-
 end
 
+ALLdepart
+
+%{
 space=1:L;
 time0=0:dt0:tmax0-dt0;
 time1=tmax0:dt:tmax0+tmax-dt;
@@ -340,7 +211,7 @@ save SystemParameters L N N2 W U judge boundary Ndis position Nt tmax Nt0 tmax0 
 save Measurment Mdensity1f Mdensity2f Mdensity1f0 Mdensity2f0 ...
     ALLdepart Mdepart Ddepart ALLentropy Mentropy Dentropy HalfNum EimpKin EimpPot EmajKin EmajPot Eint;
 %save('/scratch/ly15/WaveFunctiongT01.mat','WFt');
-
+%}
 
 
 

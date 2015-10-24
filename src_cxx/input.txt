@@ -3,9 +3,9 @@ N		2
 N2		1
 W		10.0
 U		1.0
-tmax		3000.0
-Nt		200
+tmax		10.0
+Nt		50
 judge		1
 boundary	0
 position	1
-
+set_gsl_under_flow_ratio	10
