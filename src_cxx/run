@@ -1,0 +1,6 @@
+#!/bin/bash
+
+make all
+#./mbl > screen.log
+mpirun -n 6 mbl 
+#gdb mbl

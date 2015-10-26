@@ -245,12 +245,19 @@ PetscErrorCode cHamiltonianMatrix::WaveFunctionUpdate(const int k){
 
 PetscErrorCode cHamiltonianMatrix::measurement(){
 	double	 *ALLdepart = new double[Nt];
+	double	 *ALLentropy = new double[Nt];
 	double var_rank;
-	PetscScalar var_tmp;
-	gsl_matrix*	RDM = gsl_matrix_alloc(dim2,dim2);
-	gsl_vector*	vectort = gsl_vector_alloc(DIM);
+	PetscScalar var_tmp, var_tmp2;
+	gsl_complex var_tmp_gsl;
+	Vec vectort;
+	VecScatter ctx;
+    VecScatterCreateToZero(WFt[0],&ctx,&vectort);
+	if(rank==0) cout << size << endl;
+	gsl_matrix_complex*	RDM = gsl_matrix_complex_alloc(dim2,dim2);
+	gsl_vector *eval_RDM = gsl_vector_alloc(dim2);
+	gsl_eigen_herm_workspace* w_RDM = gsl_eigen_herm_alloc(dim2);
 	for (int itime = 0; itime < Nt; ++itime) {
-
+		if (rank==0) cout << "this is time " << itime << endl;
 		// % ## departure ##
 		var_rank = 0.0;
 		for (int ivar = rstart; ivar < rend; ++ivar) {
@@ -260,10 +267,38 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 		MPI_Reduce(&var_rank, &(ALLdepart[itime]), 1, MPI_DOUBLE, MPI_SUM, 0, PETSC_COMM_WORLD);
 		ALLdepart[itime] = sqrt(ALLdepart[itime]);
 		// % ## entropy ##
-
-
-
-
+	    VecScatterBegin(ctx,WFt[itime],vectort,INSERT_VALUES,SCATTER_FORWARD);
+	    VecScatterEnd(ctx,WFt[itime],vectort,INSERT_VALUES,SCATTER_FORWARD);
+//		ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
+//		ierr = VecView(WFt[itime],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//		ierr = VecView(vec_0proc,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+	    if(rank==0) {
+	    	int ivar;double eigen_RDM;
+			gsl_matrix_complex_set_zero(RDM);
+			for (int row2 = 0; row2 < dim2; ++row2) {
+				for (int col2 = row2; col2 < dim2; ++col2) {
+					var_tmp_gsl.dat[0] = 0.0; var_tmp_gsl.dat[1] = 0.0;
+					for (int jjj = 0; jjj < dim; ++jjj) {
+						ivar = row2*dim+jjj;
+						ierr = VecGetValues(vectort,1,&ivar,&var_tmp);CHKERRQ(ierr);
+						ivar = col2*dim+jjj;
+						ierr = VecGetValues(vectort,1,&ivar,&var_tmp2);CHKERRQ(ierr);
+						var_tmp_gsl.dat[0] += PetscRealPart(var_tmp*PetscConj(var_tmp2));
+						var_tmp_gsl.dat[1] += PetscImaginaryPart(var_tmp*PetscConj(var_tmp2));
+					}
+					gsl_matrix_complex_set(RDM,row2,col2,var_tmp_gsl);
+					if (col2 != row2) {
+						gsl_matrix_complex_set(RDM,col2,row2,gsl_matrix_complex_get(RDM,row2,col2));
+					}
+				}
+			}
+			 gsl_eigen_herm(RDM,eval_RDM,w_RDM);
+			 ALLentropy[itime] = 0;
+			 for (ivar = 0; ivar < dim2; ++ivar) {
+				 eigen_RDM = gsl_vector_get(eval_RDM, ivar);
+				 ALLentropy[itime] += -eigen_RDM*log(eigen_RDM);
+			}
+	    }
 
 		// % ## density distribution of impurity fermion
 
@@ -272,15 +307,21 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	}
 
 	if (rank == 0) {
-		cout << "departure at time t is " << endl;
+
 		for (int itime = 0; itime < Nt; ++itime) {
-			cout << dt*itime << '\t' << ALLdepart[itime] << endl;
+			if (itime==0) {
+				cout << "time t " << '\t' << "departure " << '\t' << "entropy " << endl;
+			}
+			cout << dt*itime << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << endl;
 		}
 	}
 
-	gsl_matrix_free(RDM);
-	gsl_vector_free(vectort);
 	delete[] ALLdepart;
+    VecScatterDestroy(&ctx);
+    VecDestroy(&vectort);
+    gsl_matrix_complex_free(RDM);
+    gsl_vector_free(eval_RDM);
+	gsl_eigen_herm_free(w_RDM);
 	return ierr;
 }
 
