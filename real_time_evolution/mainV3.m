@@ -136,7 +136,7 @@ for jdis=1:Ndis,
         end
         [v,d]=eig(RDM);
         ALLentropy(jt,jdis)=-trace(d.*log(d));
-        %{
+        
         % ## density distribution of impurity fermion
         for j1=1:dim,
             for j2=1:dim2,
@@ -153,7 +153,7 @@ for jdis=1:Ndis,
                 end
             end
         end
-%}    
+    
     end
     %---- Measurement I end -----------
     %--------------------------------------------
@@ -164,6 +164,8 @@ for jdis=1:Ndis,
 end
 
 ALLdepart
+
+ALLentropy
 
 %{
 space=1:L;

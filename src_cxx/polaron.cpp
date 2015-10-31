@@ -766,8 +766,8 @@ void cHamiltonianMatrix::randomPotential(gsl_vector* randV){
 	  // the gettimeofday() solution, might be better its level of accuracy is enough:
 	  unsigned long int seed_number;
 	  if (rank == 0) {
-		  seed_number = 0; // debug purpose.
-//		  seed_number = random_seed();
+//		  seed_number = 0; // debug purpose.
+		  seed_number = random_seed();
 //		  cout << "Before broadcasting, seed number is " << seed_number << endl;
 	  }
 	  MPI_Bcast(&seed_number, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD); //replace MPI_INT by MPI_UNSIGNED_LONG if int is not long enough.
