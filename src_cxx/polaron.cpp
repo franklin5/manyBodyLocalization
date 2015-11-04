@@ -42,7 +42,7 @@ PetscErrorCode cHamiltonianMatrix::input(){
 	        tmax = dummyvalue;    if (ig == 0) cout << "Total time " << dummyname << "=" << tmax << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        Nt = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << Nt << endl;
-	    	dt=log(tmax)/Nt; if (ig == 0) cout << "time steps in log time scale = "  << dt << endl;
+	    	dt=(log(tmax)+3.0)/Nt; if (ig == 0) cout << "time steps in log time scale = "  << dt << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        judge = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << judge << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
@@ -227,7 +227,7 @@ PetscErrorCode cHamiltonianMatrix::KernalPolynomialMethod(){
 }
 
 PetscErrorCode cHamiltonianMatrix::WaveFunctionUpdate(const int k){
-	double prefactor;
+	double prefactor, timeT;
 	if (k==0) {
 		prefactor = 1.0;
 	} else {
@@ -235,10 +235,11 @@ PetscErrorCode cHamiltonianMatrix::WaveFunctionUpdate(const int k){
 	}
 	PetscScalar coeff;
 	for (int itime = 0; itime < Nt; ++itime) {
-		if (a_scaling*dt*itime*set_gsl_under_flow_ratio+set_gsl_shift_value>=k) { // if GSL underflow error occurs, try to decrease the factor relation, but the price to pay is mostly inaccuracies in small time steps.
+		timeT = a_scaling*exp(dt*itime-3.0);
+		if (timeT*set_gsl_under_flow_ratio+set_gsl_shift_value>=k) { // if GSL underflow error occurs, try to decrease the factor relation, but the price to pay is mostly inaccuracies in small time steps.
 			// This is to avoid underflow in GSL error, which means the bessel function is too small to be computed reliably. MATLAB decides this behavior too, by setting it to zero, if it is too small (underflow).
 			// using emperical factor relation of discarding the less cases
-			coeff = prefactor*PetscPowComplex(-1.0*PETSC_i,k)* gsl_sf_bessel_Jn(k,a_scaling*dt*itime);
+			coeff = prefactor*PetscPowComplex(-1.0*PETSC_i,k)* gsl_sf_bessel_Jn(k,timeT);
 			ierr = VecAXPY(WFt[itime],coeff,X3);CHKERRQ(ierr);
 		}
 	}
@@ -299,6 +300,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 			 ALLentropy[itime] = 0;
 			 for (ivar = 0; ivar < dim2; ++ivar) {
 				 eigen_RDM = gsl_vector_get(eval_RDM, ivar);
+				 cout << eigen_RDM << endl;
 				 ALLentropy[itime] += -eigen_RDM*log(eigen_RDM);
 			}
 	    }
@@ -319,7 +321,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 			if (itime==0) {
 				cout << "time t " << '\t' << "departure " << '\t' << "entropy " << endl;
 			}
-			output << dt*itime << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << endl;
+			output << dt*itime-3 << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << endl;
 		}
 	}
 
