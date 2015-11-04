@@ -49,8 +49,10 @@ PetscErrorCode cHamiltonianMatrix::input(){
 	        boundary = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << boundary << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        position = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << position << endl;
+	        fscanf(input,"%s %lf", dummyname, &dummyvalue);
+	        set_gsl_under_flow_ratio = dummyvalue;    if (ig == 0) cout << dummyname << "=" << set_gsl_under_flow_ratio << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
-	        set_gsl_under_flow_ratio = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << set_gsl_under_flow_ratio << endl;
+	        set_gsl_shift_value = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << set_gsl_shift_value << endl;
 
 	        fclose(input);
 	        if (ig == 0) {
@@ -233,7 +235,7 @@ PetscErrorCode cHamiltonianMatrix::WaveFunctionUpdate(const int k){
 	}
 	PetscScalar coeff;
 	for (int itime = 0; itime < Nt; ++itime) {
-		if (a_scaling*dt*itime*set_gsl_under_flow_ratio>=k) { // if GSL underflow error occurs, try to decrease the factor relation, but the price to pay is mostly inaccuracies in small time steps.
+		if (a_scaling*dt*itime*set_gsl_under_flow_ratio+set_gsl_shift_value>=k) { // if GSL underflow error occurs, try to decrease the factor relation, but the price to pay is mostly inaccuracies in small time steps.
 			// This is to avoid underflow in GSL error, which means the bessel function is too small to be computed reliably. MATLAB decides this behavior too, by setting it to zero, if it is too small (underflow).
 			// using emperical factor relation of discarding the less cases
 			coeff = prefactor*PetscPowComplex(-1.0*PETSC_i,k)* gsl_sf_bessel_Jn(k,a_scaling*dt*itime);
@@ -251,7 +253,8 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	gsl_complex var_tmp_gsl;
 	Vec vectort;
 	VecScatter ctx;
-    VecScatterCreateToZero(WFt[0],&ctx,&vectort);
+	ofstream output;
+	VecScatterCreateToZero(WFt[0],&ctx,&vectort);
 	if(rank==0) cout << size << endl;
 	gsl_matrix_complex*	RDM = gsl_matrix_complex_alloc(dim2,dim2);
 	gsl_vector *eval_RDM = gsl_vector_alloc(dim2);
@@ -307,12 +310,16 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	}
 
 	if (rank == 0) {
-
+	  char filename[50];
+	  sprintf(filename,"measurement.data");
+	  output.open(filename);
+	  output.is_open();
+	  output.precision(16);
 		for (int itime = 0; itime < Nt; ++itime) {
 			if (itime==0) {
 				cout << "time t " << '\t' << "departure " << '\t' << "entropy " << endl;
 			}
-			cout << dt*itime << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << endl;
+			output << dt*itime << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << endl;
 		}
 	}
 
@@ -322,6 +329,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
     gsl_matrix_complex_free(RDM);
     gsl_vector_free(eval_RDM);
 	gsl_eigen_herm_free(w_RDM);
+	output.close();
 	return ierr;
 }
 

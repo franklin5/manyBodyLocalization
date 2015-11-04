@@ -8,4 +8,5 @@ Nt		50
 judge		1
 boundary	0
 position	1
-set_gsl_under_flow_ratio	10
+set_gsl_under_flow_ratio	1.5
+set_gsl_shift_value		10

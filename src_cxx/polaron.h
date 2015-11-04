@@ -42,7 +42,8 @@ private:
   PetscInt       ROW,COLUMN,rstart,rend,nlocal,col[__MAXNOZEROS__],nev,its,maxit,nconv;
   PetscScalar    value[__MAXNOZEROS__],HpolaronMax,HpolaronMin;
   double		 a_scaling, b_scaling;
-  int			 set_gsl_under_flow_ratio;
+  double			 set_gsl_under_flow_ratio;
+  int            set_gsl_shift_value;      
   gsl_vector *	 rr;
 protected:
   PetscErrorCode ierr;
