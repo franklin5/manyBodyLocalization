@@ -227,22 +227,52 @@ PetscErrorCode cHamiltonianMatrix::KernalPolynomialMethod(){
 }
 
 PetscErrorCode cHamiltonianMatrix::WaveFunctionUpdate(const int k){
-	double prefactor, timeT;
+  double prefactor, timeT;
 	if (k==0) {
 		prefactor = 1.0;
 	} else {
 		prefactor = 2.0;
 	}
 	PetscScalar coeff;
-	for (int itime = 0; itime < Nt; ++itime) {
+	//gsl_sf_result tmp;
+	//int err;
+	double tmp, tmpi,zi,order;
+	int n,nz,ierr,kode;
+	n=1;kode=1;zi=0;
+        
+	//	gsl_error_handler_t* old_handler=gsl_set_error_handler_off(); 
+
+	for (int itime = Nt-1; itime >= 0; --itime) {
 		timeT = a_scaling*exp(dt*itime-3.0);
-		if (timeT*set_gsl_under_flow_ratio+set_gsl_shift_value>=k) { // if GSL underflow error occurs, try to decrease the factor relation, but the price to pay is mostly inaccuracies in small time steps.
+		if (timeT*set_gsl_under_flow_ratio+set_gsl_shift_value>=k) { //if GSL underflow error occurs, try to decrease the factor relation, but the price to pay is mostly inaccuracies in small time steps.
 			// This is to avoid underflow in GSL error, which means the bessel function is too small to be computed reliably. MATLAB decides this behavior too, by setting it to zero, if it is too small (underflow).
 			// using emperical factor relation of discarding the less cases
-			coeff = prefactor*PetscPowComplex(-1.0*PETSC_i,k)* gsl_sf_bessel_Jn(k,timeT);
-			ierr = VecAXPY(WFt[itime],coeff,X3);CHKERRQ(ierr);
-		}
+		  //coeff=prefactor*PetscPowComplex(-1.0*PETSC_i,k)* gsl_sf_bessel_Jn(k,timeT);
+		  
+		  //open_spec_func: formula
+		  order=double(k);
+		  zbesj_(&timeT,&zi,&order,&kode,&n,&tmp,&tmpi,&nz,&ierr);
+		  coeff=prefactor*PetscPowComplex(-1.0*PETSC_i,k)*tmp;
+		  //gsl_bessel: formula
+		  //err=gsl_sf_bessel_Jn_e(k,timeT,&tmp);
+		  //if (err==0&&isnan(tmp.val)!=1) {
+		  //coeff = prefactor*PetscPowComplex(-1.0*PETSC_i,k)* tmp.val;
+		  //} else {
+		  //break;
+		  //}
+		  ierr = VecAXPY(WFt[itime],coeff,X3);CHKERRQ(ierr);
+   		  //if (rank==0) cout << "k=" << k << " time=" << timeT << " coeff=" << coeff << endl;
+		  } // else { 
+		  // coefftmp=gsl_sf_bessel_Jn(k,timeT);
+		  // if (coefftmp<1e-6){
+		// break;
+		//} else {
+		// coeff=prefactor*PetscPowComplex(-1.0*PETSC_i,k)*coefftmp;
+		//}
+		//}
+		//		ierr = VecAXPY(WFt[itime],coeff,X3);CHKERRQ(ierr);
 	}
+	//gsl_set_error_handler(old_handler);
 	return ierr;
 }
 
@@ -300,7 +330,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 			 ALLentropy[itime] = 0;
 			 for (ivar = 0; ivar < dim2; ++ivar) {
 				 eigen_RDM = gsl_vector_get(eval_RDM, ivar);
-				 cout << eigen_RDM << endl;
+				 //  cout << eigen_RDM << endl;
 				 ALLentropy[itime] += -eigen_RDM*log(eigen_RDM);
 			}
 	    }
@@ -313,7 +343,9 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 
 	if (rank == 0) {
 	  char filename[50];
-	  sprintf(filename,"measurement.data");
+	  //char * source="/home/sszhang/manyBodyLocalization/dis01/measurement.data";
+	  //char * destination="/home/sszhang/manyBodyLocalization/measurement01.data";
+	  sprintf(filename,"../measurement.data");
 	  output.open(filename);
 	  output.is_open();
 	  output.precision(16);
@@ -324,6 +356,8 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 			output << dt*itime-3 << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << endl;
 		}
 	}
+	
+	//	CopyFile(source,destination,FALSE);
 
 	delete[] ALLdepart;
     VecScatterDestroy(&ctx);
@@ -332,6 +366,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
     gsl_vector_free(eval_RDM);
 	gsl_eigen_herm_free(w_RDM);
 	output.close();
+	//	CopyFile(source,destination,FALSE);
 	return ierr;
 }
 
