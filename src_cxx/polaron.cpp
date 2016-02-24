@@ -345,7 +345,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	  char filename[50];
 	  //char * source="/home/sszhang/manyBodyLocalization/dis01/measurement.data";
 	  //char * destination="/home/sszhang/manyBodyLocalization/measurement01.data";
-	  sprintf(filename,"../measurement.data");
+	  sprintf(filename,"measurement.data");
 	  output.open(filename);
 	  output.is_open();
 	  output.precision(16);
