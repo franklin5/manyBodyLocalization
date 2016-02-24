@@ -9,6 +9,7 @@
      petscviewer.h - viewers               petscpc.h  - preconditioners
 
 */
+#include <cstdio>
 #include <slepceps.h>
 //#include <petscksp.h>
 //#include <petscsys.h>
@@ -26,9 +27,16 @@
 #include <gsl/gsl_eigen.h>
 #include <gsl/gsl_permutation.h>
 #include <gsl/gsl_sf_bessel.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_sf_result.h>
 #include <sys/time.h>
 using namespace std;
 const PetscInt __MAXNOZEROS__ = 100; // TODO: This is the max number in a row --> theoretically largest recursion relation index given by the Hamiltonian.
+
+extern "C" {
+  void zbesj_( double *zr, double *zi, double *fnu, int *kode, int *n,
+	       double *Jr, double *Ji, int *nz, int *ierr );
+}
 
 class cHamiltonianMatrix{
 private:

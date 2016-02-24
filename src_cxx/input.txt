@@ -3,10 +3,10 @@ N		2
 N2		1
 W		10.0
 U		1.0
-tmax		3000.0
-Nt		500
-judge		1
-boundary	0
+tmax		5000.0
+Nt		100
+judge		0
+boundary	1
 position	1
 set_gsl_under_flow_ratio	1.05
-set_gsl_shift_value		50
+set_gsl_shift_value		10
