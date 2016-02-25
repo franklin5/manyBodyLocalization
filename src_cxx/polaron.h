@@ -9,7 +9,6 @@
      petscviewer.h - viewers               petscpc.h  - preconditioners
 
 */
-#include <cstdio>
 #include <slepceps.h>
 //#include <petscksp.h>
 //#include <petscsys.h>
@@ -56,8 +55,8 @@ private:
 protected:
   PetscErrorCode ierr;
   PetscInt       N,N2,L,position;
-  PetscInt		 judge, boundary; // judge=0;	% Clean background!---This background serves as a heat bath!
-  	  	  	  	  	  	  	  	  // judge=1;    % Disordered background!---'energy' bath due to interaction
+  PetscInt		 judgeB,judgeI, boundary; // judgeB=0;	% Clean background!---This background serves as a heat bath!
+  	  	  	  	  	  	  	  	  // judgeB=1;    % Disordered background!---'energy' bath due to interaction
   	  	  	  	  	  	  	  	  // boundary=1; % @Open Boundary
   	  	  	  	  	  	  	  	  // boundary=0; % @Periodic Boundary
   PetscInt		 dim, dim2,DIM;   // Derived parameters: too large L or N will give non-number: NaN or Inf.

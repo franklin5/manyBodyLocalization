@@ -44,8 +44,10 @@ PetscErrorCode cHamiltonianMatrix::input(){
 	        Nt = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << Nt << endl;
 	    	dt=(log(tmax)+3.0)/Nt; if (ig == 0) cout << "time steps in log time scale = "  << dt << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
-	        judge = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << judge << endl;
+	        judgeB = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << judgeB << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
+                judgeI = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << judgeI << endl;
+		fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        boundary = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << boundary << endl;
 	        fscanf(input,"%s %d", dummyname, &intdummyvalue);
 	        position = intdummyvalue;    if (ig == 0) cout << dummyname << "=" << position << endl;
@@ -56,17 +58,22 @@ PetscErrorCode cHamiltonianMatrix::input(){
 
 	        fclose(input);
 	        if (ig == 0) {
-	        	if (judge==0) {
-					cout << "Clean background!---This background serves as a heat bath!  " << endl;
-				} else {
-					cout << "Disordered background!---'energy' bath due to interaction" << endl;
-				}
-				if (boundary==0) {
-					cout << "#Periodic Boundary Conditions" << endl;
-				} else {
-					cout << "#Open Boundary Conditions" << endl;
-				}
-				cout << "---------------------------------------------------------- " << endl;
+	        	if (judgeB==0) {
+			  cout << "Clean background!---This background serves as a heat bath!  " << endl;
+			} else {
+			  cout << "Disordered background!---'energy' bath due to interaction" << endl;
+			}
+			if (judgeI==0) {
+                          cout << "Clean impurity!---This background serves as a heat bath!  " << endl;
+                        } else {
+                          cout << "Disordered impurity!---'energy' bath due to interaction" << endl;
+                        }
+			if (boundary==0) {
+			  cout << "#Periodic Boundary Conditions" << endl;
+			} else {
+			  cout << "#Open Boundary Conditions" << endl;
+			}
+			cout << "---------------------------------------------------------- " << endl;
 	        }
 	    }
 	}
@@ -193,36 +200,40 @@ PetscErrorCode cHamiltonianMatrix::hamiltonianRescaling(){
 }
 
 PetscErrorCode cHamiltonianMatrix::KernalPolynomialMethod(){
-	int cutoff0 = int(3.0*a_scaling*tmax);
+	int cutoff0 = int(1.5*a_scaling*tmax);
 	if (rank==0) cout << "cutoff is chosen as " << cutoff0 << endl;
 	ierr = VecDuplicate(X1,&X3);CHKERRQ(ierr);
 	ierr = VecDuplicateVecs(X1,Nt,&WFt);CHKERRQ(ierr);
 	for(int i = 0; i<Nt; ++i) {ierr = VecZeroEntries(WFt[i]);CHKERRQ(ierr);}
 
+	/* //view matrix or vector
+	PetscViewer viewer;
+        PetscViewerASCIIOpen(PETSC_COMM_WORLD, NULL, &viewer);
+        PetscViewerSetFormat(viewer, PETSC_VIEWER_ASCII_DENSE);
+	*/
 	ierr = VecCopy(X1,X3);CHKERRQ(ierr);  // TODO: avoid the copy for efficiency.
 	WaveFunctionUpdate(0);
+	//if (rank==0) cout<< "iter_k="<< 1 <<": X3=" << endl;
+	//VecView(X3,viewer);
 	ierr = MatMult(Hpolaron,X1,X2);CHKERRQ(ierr);
 	ierr = VecCopy(X2,X3);CHKERRQ(ierr);	// TODO: avoid the copy for efficiency.
 	WaveFunctionUpdate(1);
+	//if (rank==0) cout<< "iter_k="<< 2 <<": X3=" << endl;
+	//VecView(X3,viewer);
 	for (int iter_k = 2; iter_k <= cutoff0; ++iter_k) {
 		ierr = MatMult(Hpolaron,X2,X3);CHKERRQ(ierr);
 		ierr = VecScale(X3,2.0);CHKERRQ(ierr);
 		ierr = VecAXPY(X3,-1.0,X1);CHKERRQ(ierr);
 		WaveFunctionUpdate(iter_k);
+		/*	if (iter_k==1000) {
+		  if (rank==0) cout<< "iter_k="<< iter_k+1 <<": X3=" << endl;
+		  VecView(X3,viewer);
+		  }*/
 		ierr = VecCopy(X2,X1);CHKERRQ(ierr);
 		ierr = VecCopy(X3,X2);CHKERRQ(ierr);
 		if(iter_k%int(cutoff0*0.1)==0) if (rank==0) cout << iter_k << "th iteration within total of " << cutoff0 << " cutoff has finished." << endl;
 	}
-//	for (int itime = 0; itime < Nt; ++itime) {
-//		ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
-//		ierr = VecView(WFt[itime],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-//	}
-
-//	ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
-//	ierr = VecView(WFt[1],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-//	ierr = VecView(WFt[2],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-//	ierr = VecView(WFt[3],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-//	ierr = VecView(WFt[Nt-1],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+	/*PetscViewerDestroy(&viewer);*/
 	return ierr;
 }
 
@@ -279,6 +290,8 @@ PetscErrorCode cHamiltonianMatrix::WaveFunctionUpdate(const int k){
 PetscErrorCode cHamiltonianMatrix::measurement(){
 	double	 *ALLdepart = new double[Nt];
 	double	 *ALLentropy = new double[Nt];
+	gsl_matrix*     density1 = gsl_matrix_alloc(L,Nt);//background fermion density
+	gsl_matrix*     density2 = gsl_matrix_alloc(L,Nt);//background fermion density
 	double var_rank;
 	PetscScalar var_tmp, var_tmp2;
 	gsl_complex var_tmp_gsl;
@@ -291,81 +304,125 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	gsl_vector *eval_RDM = gsl_vector_alloc(dim2);
 	gsl_eigen_herm_workspace* w_RDM = gsl_eigen_herm_alloc(dim2);
 	for (int itime = 0; itime < Nt; ++itime) {
-		if (rank==0) cout << "this is time " << itime << endl;
-		// % ## departure ##
-		var_rank = 0.0;
-		for (int ivar = rstart; ivar < rend; ++ivar) {
-			ierr = VecGetValues(WFt[itime],1,&ivar,&var_tmp);CHKERRQ(ierr);
-			var_rank += pow(gsl_vector_get(rr,ivar)*PetscAbsComplex(var_tmp),2);
+	  if (rank==0&&itime%10==0) cout << "this is time " << itime << endl;
+	  // % ## departure ##
+	  var_rank = 0.0;
+	  for (int ivar = rstart; ivar < rend; ++ivar) {
+	    ierr = VecGetValues(WFt[itime],1,&ivar,&var_tmp);CHKERRQ(ierr);
+	    var_rank += pow(gsl_vector_get(rr,ivar)*PetscAbsComplex(var_tmp),2);
+	  }
+	  MPI_Reduce(&var_rank, &(ALLdepart[itime]), 1, MPI_DOUBLE, MPI_SUM, 0, PETSC_COMM_WORLD);
+	  ALLdepart[itime] = sqrt(ALLdepart[itime]);
+	  // % ## entropy ##
+	  VecScatterBegin(ctx,WFt[itime],vectort,INSERT_VALUES,SCATTER_FORWARD);
+	  VecScatterEnd(ctx,WFt[itime],vectort,INSERT_VALUES,SCATTER_FORWARD);
+	  if(rank==0) {
+	    int ivar;double eigen_RDM;
+	    gsl_matrix_complex_set_zero(RDM);
+	    for (int row2 = 0; row2 < dim2; ++row2) {
+	      for (int col2 = row2; col2 < dim2; ++col2) {
+		var_tmp_gsl.dat[0] = 0.0; var_tmp_gsl.dat[1] = 0.0;
+		for (int jjj = 0; jjj < dim; ++jjj) {
+		  ivar = row2*dim+jjj;
+		  ierr = VecGetValues(vectort,1,&ivar,&var_tmp);CHKERRQ(ierr);
+		  ivar = col2*dim+jjj;
+		  ierr = VecGetValues(vectort,1,&ivar,&var_tmp2);CHKERRQ(ierr);
+		  var_tmp_gsl.dat[0] += PetscRealPart(var_tmp*PetscConj(var_tmp2));
+		  var_tmp_gsl.dat[1] += PetscImaginaryPart(var_tmp*PetscConj(var_tmp2));
 		}
-		MPI_Reduce(&var_rank, &(ALLdepart[itime]), 1, MPI_DOUBLE, MPI_SUM, 0, PETSC_COMM_WORLD);
-		ALLdepart[itime] = sqrt(ALLdepart[itime]);
-		// % ## entropy ##
-	    VecScatterBegin(ctx,WFt[itime],vectort,INSERT_VALUES,SCATTER_FORWARD);
-	    VecScatterEnd(ctx,WFt[itime],vectort,INSERT_VALUES,SCATTER_FORWARD);
-//		ierr = PetscViewerSetFormat(PETSC_VIEWER_STDOUT_WORLD,	PETSC_VIEWER_ASCII_MATLAB  );CHKERRQ(ierr);
-//		ierr = VecView(WFt[itime],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-//		ierr = VecView(vec_0proc,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-	    if(rank==0) {
-	    	int ivar;double eigen_RDM;
-			gsl_matrix_complex_set_zero(RDM);
-			for (int row2 = 0; row2 < dim2; ++row2) {
-				for (int col2 = row2; col2 < dim2; ++col2) {
-					var_tmp_gsl.dat[0] = 0.0; var_tmp_gsl.dat[1] = 0.0;
-					for (int jjj = 0; jjj < dim; ++jjj) {
-						ivar = row2*dim+jjj;
-						ierr = VecGetValues(vectort,1,&ivar,&var_tmp);CHKERRQ(ierr);
-						ivar = col2*dim+jjj;
-						ierr = VecGetValues(vectort,1,&ivar,&var_tmp2);CHKERRQ(ierr);
-						var_tmp_gsl.dat[0] += PetscRealPart(var_tmp*PetscConj(var_tmp2));
-						var_tmp_gsl.dat[1] += PetscImaginaryPart(var_tmp*PetscConj(var_tmp2));
-					}
-					gsl_matrix_complex_set(RDM,row2,col2,var_tmp_gsl);
-					if (col2 != row2) {
-						gsl_matrix_complex_set(RDM,col2,row2,gsl_matrix_complex_get(RDM,row2,col2));
-					}
-				}
-			}
-			 gsl_eigen_herm(RDM,eval_RDM,w_RDM);
-			 ALLentropy[itime] = 0;
-			 for (ivar = 0; ivar < dim2; ++ivar) {
-				 eigen_RDM = gsl_vector_get(eval_RDM, ivar);
-				 //  cout << eigen_RDM << endl;
-				 ALLentropy[itime] += -eigen_RDM*log(eigen_RDM);
-			}
+		gsl_matrix_complex_set(RDM,row2,col2,var_tmp_gsl);
+		if (col2 != row2) {
+		  gsl_matrix_complex_set(RDM,col2,row2,gsl_matrix_complex_get(RDM,row2,col2));
+		}
+	      }
 	    }
+	    gsl_eigen_herm(RDM,eval_RDM,w_RDM);
+	    ALLentropy[itime] = 0;
+	    for (ivar = 0; ivar < dim2; ++ivar) {
+	      eigen_RDM = gsl_vector_get(eval_RDM, ivar);
+	      //  cout << eigen_RDM << endl;
+	      ALLentropy[itime] += -eigen_RDM*log(eigen_RDM);
+	    }
+	  }
 
-		// % ## density distribution of impurity fermion
-
-		// % ## density distribution of majority fermions
-
-	}
-
-	if (rank == 0) {
-	  char filename[50];
-	  //char * source="/home/sszhang/manyBodyLocalization/dis01/measurement.data";
-	  //char * destination="/home/sszhang/manyBodyLocalization/measurement01.data";
-	  sprintf(filename,"measurement.data");
-	  output.open(filename);
-	  output.is_open();
-	  output.precision(16);
-		for (int itime = 0; itime < Nt; ++itime) {
-			if (itime==0) {
-				cout << "time t " << '\t' << "departure " << '\t' << "entropy " << endl;
-			}
-			output << dt*itime-3 << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << endl;
+	  // % ## density distribution of impurity fermion
+	  if(rank==0) {
+            int ivar;
+            for (int row2 = 0; row2 < dim2; ++row2) {
+	      for (int jpar = 0; jpar < N2; ++jpar) {
+		double density_tmp=0;
+		for (int jjj = 0; jjj < dim; ++jjj) {
+		  ivar = row2*dim+jjj;
+		  ierr = VecGetValues(vectort,1,&ivar,&var_tmp);CHKERRQ(ierr);
+		  density_tmp +=pow(PetscAbsComplex(var_tmp),2);
 		}
-	}
-	
-	//	CopyFile(source,destination,FALSE);
+		/*if (itime==0) {
+		  if (rank==0) cout << "density_tmp=" << density_tmp << endl;
+		  }*/
+		gsl_matrix_set(density2,gsl_matrix_get(basis2,jpar,row2)-1,itime,gsl_matrix_get(density2,gsl_matrix_get(basis2,jpar,row2)-1,itime)+density_tmp);
+	      }
+	    }
+	  }
 
+	  /*if (rank==0) {
+	    cout << "density of impurity:" << endl;
+	    for (int jpar =0; jpar < L; ++jpar) {
+	      cout << gsl_matrix_get(density2,jpar,itime) << "\t";
+	    }
+	    cout << endl;
+	    }*/
+	            
+	  // % ## density distribution of majority fermions
+	  if(rank==0) {
+            int ivar;
+	    for (int jjj = 0; jjj < dim; ++jjj) {
+	      for (int jpar = 0; jpar < N; ++jpar) {
+                double density_tmp=0;
+		for (int row2 = 0; row2 < dim2; ++row2) {
+                  ivar = row2*dim+jjj;
+                  ierr = VecGetValues(vectort,1,&ivar,&var_tmp);CHKERRQ(ierr);
+		  density_tmp +=pow(PetscAbsComplex(var_tmp),2);
+		}
+		gsl_matrix_set(density1,gsl_matrix_get(basis1,jpar,jjj)-1,itime,gsl_matrix_get(density1,gsl_matrix_get(basis1,jpar,jjj)-1,itime)+density_tmp);
+              }
+            }
+          }
+	}
+
+	  
+	if (rank == 0) {
+          char filename[50];
+	  sprintf(filename,"measurement.data");
+          output.open(filename);
+          output.is_open();
+          output.precision(16);
+          for (int itime = 0; itime < Nt; ++itime) {
+            if (itime==0) {
+	      //              cout << "time t[1] " << '\t' << "departure[2] " << '\t' << "entropy[3]" << '\t' << "density of majority [L]" <<'\t' << "density of impurity [L]" << endl;
+            }
+            output << dt*itime-3 << '\t' << ALLdepart[itime] << '\t' << ALLentropy[itime] << '\t';
+	    for (int jpar = 0; jpar < L; ++jpar) {
+              output << gsl_matrix_get(density1,jpar,itime) << '\t';
+            }
+	    for (int jpar = 0; jpar < L; ++jpar) {
+              output << gsl_matrix_get(density2,jpar,itime) << '\t';
+            }
+	    output << endl;
+          }
+          output.close();
+	}
+ 
+
+	//	CopyFile(source,destination,FALSE);
+	
 	delete[] ALLdepart;
-    VecScatterDestroy(&ctx);
-    VecDestroy(&vectort);
-    gsl_matrix_complex_free(RDM);
-    gsl_vector_free(eval_RDM);
+	VecScatterDestroy(&ctx);
+	VecDestroy(&vectort);
+	gsl_matrix_complex_free(RDM);
+	gsl_vector_free(eval_RDM);
 	gsl_eigen_herm_free(w_RDM);
-	output.close();
+	gsl_matrix_free(density1);
+	gsl_matrix_free(density2);
 	//	CopyFile(source,destination,FALSE);
 	return ierr;
 }
@@ -410,7 +467,7 @@ PetscErrorCode cHamiltonianMatrix::assemblance(){
 	*/
 	int nonzeros; // TODO: check if nonzeros < __MAXNOZEROS__ is true.
 	  int spin_flag;
-	  PetscReal _val_;
+	  //	  PetscReal _val_;
 	  for (ROW=rstart; ROW<rend; ROW++) {
 		  nonzeros = 0;
 
@@ -622,7 +679,7 @@ void cHamiltonianMatrix::spin_flag_condition(int & _N, int & _dim, const int spi
 
 PetscReal cHamiltonianMatrix::compute_diag(){
 	PetscReal sumAA=0, tempR;
-	if (judge==1) {
+	if (judgeB==1) {
 		for (int jpar = 1; jpar <= N; ++jpar) {
 			tempR = gsl_matrix_get(basis1,jpar-1,_jdim1); // cout << tempR << endl;
 			tempR = tempR-1; // potential fail of the index 0 or 1 bug. Temporary fix.
@@ -630,8 +687,10 @@ PetscReal cHamiltonianMatrix::compute_diag(){
 		}
 //	cout << sumAA << endl;
 	}
-	for (int jpar2 = 1; jpar2 <= N2; ++jpar2) {
-		sumAA += gsl_vector_get(randV,gsl_matrix_get(basis2,jpar2-1,_jdim2)-1);
+	if (judgeI==1) {
+	  for (int jpar2 = 1; jpar2 <= N2; ++jpar2) {
+	    sumAA += gsl_vector_get(randV,gsl_matrix_get(basis2,jpar2-1,_jdim2)-1);
+	  }
 	}
 //	cout << sumAA << endl;
 	for (int jpar = 1; jpar <= N; ++jpar) {
@@ -701,14 +760,17 @@ PetscErrorCode cHamiltonianMatrix::initial_state(){
 	gsl_matrix *H0 = gsl_matrix_alloc(L,L);
 	gsl_matrix_set_zero(H0);
 	for (int j = 0; j < L; ++j) {
-		if (j==0) {
-			gsl_matrix_set(H0,j,j+1,-1.0);
-		} else if(j==L-1){
-			gsl_matrix_set(H0,j,j-1,-1.0);
-		} else {
-			gsl_matrix_set(H0,j,j+1,-1.0);
-			gsl_matrix_set(H0,j,j-1,-1.0);
-		}
+	  if (judgeB==1) {
+	    gsl_matrix_set(H0,j,j,gsl_vector_get(randV,j));
+	  }
+	  if (j==0) {
+	    gsl_matrix_set(H0,j,j+1,-1.0);
+	  } else if(j==L-1){
+	    gsl_matrix_set(H0,j,j-1,-1.0);
+	  } else {
+	    gsl_matrix_set(H0,j,j+1,-1.0);
+	    gsl_matrix_set(H0,j,j-1,-1.0);
+	  }
 	}
 //	for (int i = 0; i < L; ++i) {
 //		for (int j = 0; j < L; ++j) {
@@ -822,7 +884,8 @@ void cHamiltonianMatrix::randomPotential(gsl_vector* randV){
 
 	  for (int i = 0; i < L; i++)
 	    {
-		  gsl_vector_set(randV, i, -W/2+W*gsl_rng_uniform (r));
+	      gsl_vector_set(randV, i, -W/2+W*gsl_rng_uniform (r));
+	      // gsl_vector_set(randV,i,1+i-double(L)/2.0);// non-disordered potential for benchmark
 	    }
 
 	  gsl_rng_free (r);
