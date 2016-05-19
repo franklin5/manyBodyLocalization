@@ -292,6 +292,8 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	double	 *ALLentropy = new double[Nt];
 	gsl_matrix*     density1 = gsl_matrix_alloc(L,Nt);//background fermion density
 	gsl_matrix*     density2 = gsl_matrix_alloc(L,Nt);//background fermion density
+	gsl_vector*     corr12 = gsl_vector_alloc(Nt);//correlation betwen fermion up and down.                                         
+        // The density correlation is in fact proportional to the interacting energy.                                                     
 	double var_rank;
 	PetscScalar var_tmp, var_tmp2;
 	gsl_complex var_tmp_gsl;
@@ -387,6 +389,25 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
               }
             }
           }
+
+	  // correlation between impurity and majority fermion                                                                            
+          if(rank==0) {
+            int ivar;
+            double corr_tmp=0;
+            for (int jimp=0; jimp<dim2; ++jimp) {
+              for (int jmaj=0; jmaj<dim; ++jmaj) {
+                for (int jpar=0; jpar<N; ++jpar)  {
+                  if (gsl_matrix_get(basis1,jpar,jmaj)==jimp+1){
+                    ivar = jimp*dim+jmaj;
+                    ierr = VecGetValues(vectort,1,&ivar,&var_tmp);CHKERRQ(ierr);
+                    corr_tmp+=pow(PetscAbsComplex(var_tmp),2);
+                  }
+                }
+              }
+            }
+            gsl_vector_set(corr12,itime,corr_tmp);
+          }// end of correlation
+
 	}
 
 	  
@@ -407,6 +428,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	    for (int jpar = 0; jpar < L; ++jpar) {
               output << gsl_matrix_get(density2,jpar,itime) << '\t';
             }
+	    output << gsl_vector_get(corr12,itime) << '\t';
 	    output << endl;
           }
           output.close();
@@ -423,6 +445,7 @@ PetscErrorCode cHamiltonianMatrix::measurement(){
 	gsl_eigen_herm_free(w_RDM);
 	gsl_matrix_free(density1);
 	gsl_matrix_free(density2);
+	gsl_vector_free(corr12);
 	//	CopyFile(source,destination,FALSE);
 	return ierr;
 }
