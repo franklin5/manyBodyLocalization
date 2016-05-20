@@ -1,0 +1,47 @@
+#!/bin/bash
+#UArray=(0.001 0.1 1 5 20)                                                                       
+UArray=(1 5 10 20 50)
+#UArray=(0.1 2 5 8 10 15 20 25 30 50)
+#UArray=(50)
+for U in "${UArray[@]}"
+do
+    i=0
+    B=1
+    W=2
+    tmax=8000
+    Nt=100
+    mkdir W_${W}i${i}B${B}U_${U}
+    sed -i '4s/.*/W '$W'/' input.txt
+    sed -i '5s/.*/U '$U'/' input.txt
+    sed -i '6s/.*/tmax '$tmax'/' input.txt
+    sed -i '7s/.*/Nt '$Nt'/' input.txt
+    sed -i '8s/.*/judgeB '$B'/' input.txt
+    sed -i '9s/.*/judgeI '$i'/' input.txt
+    cd W_${W}i${i}B${B}U_${U}
+    cp ../input.txt .
+    cp ../jobs .
+    ln -s ../mbl .
+    LATTICESIZE=$(awk 'BEGIN{for(i=10;i<=12;i+=2)print i}')
+    BATCHS=$(awk 'BEGIN{for(i=1;i<=5;i+=1)print i}')
+    for L in $LATTICESIZE
+    do
+	mkdir L$L
+	cd L$L
+	cp ../input.txt .
+	sed -i '1s/.*/L '$L'/' input.txt
+	N=$((L / 2))
+	sed -i '2s/.*/N '$N'/' input.txt
+    cat input.txt                                                                      
+	for i in $BATCHS
+	do
+            mkdir batch$i
+            cd batch$i
+            cp ../../jobs .
+            sbatch -A TG-PHY150032 jobs
+            cd ..
+	done
+	cd ..
+    done
+    cd ..
+done
+    

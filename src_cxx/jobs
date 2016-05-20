@@ -3,10 +3,21 @@
 #SBATCH -o mbl.o%j       
 #SBATCH -n 64
 #SBATCH -p normal     # queue (partition) -- normal, development, etc.                                                                                               
-#SBATCH -t 00:10:00    
+#SBATCH -t 01:30:00    
 #SBATCH --mail-user=phydonglin@gmail.com                                                                                                                             
 #SBATCH --mail-type=begin  # email me when the job starts                                                                                                            
 #SBATCH --mail-type=end    # email me when the job finishes                                                                                                        
- 
-ibrun ./mbl
+cat jobs
+RUNS=$(awk 'BEGIN{for(i=1;i<=10;i+=1)print i}')
+for i in $RUNS
+do
+    mkdir run$i
+    cd run$i
+    rm *
+    cp ../../input.txt .
+    ln -s ../../../mbl .
+    ibrun ./mbl
+    cd ..
+done 
+
 
